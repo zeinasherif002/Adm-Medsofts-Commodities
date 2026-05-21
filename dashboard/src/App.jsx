@@ -41,8 +41,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [lastUpdated, setLastUpdated] = useState(null);
-  useEffect(() => { const interval = setInterval(load, 5 * 60 * 1000); return () => clearInterval(interval); }, [load]);
 
+  // ✅ FIXED: useCallback defined BEFORE useEffect
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -56,6 +56,7 @@ export default function App() {
   }, [commodity]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { const interval = setInterval(load, 5 * 60 * 1000); return () => clearInterval(interval); }, [load]);
 
   const latest = data[data.length - 1];
   const prev = data[data.length - 2];
@@ -154,7 +155,6 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* KPI cards */}
             {(activeTab === "overview" || activeTab === "charts") && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
                 {[
@@ -178,7 +178,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Overview tab */}
             {activeTab === "overview" && (
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
                 <div style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "20px 20px 12px" }}>
@@ -210,7 +209,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Charts tab */}
             {activeTab === "charts" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "20px 20px 12px" }}>
@@ -243,7 +241,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Returns tab */}
             {activeTab === "returns" && (
               <div style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "20px 20px 12px" }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#7a9bb5", marginBottom: 16 }}>Daily Futures Returns (%)</div>
@@ -254,16 +251,12 @@ export default function App() {
                     <YAxis tick={{ fill: "#4a7fa5", fontSize: 11 }} tickFormatter={v => v + "%"} />
                     <Tooltip content={<CustomTooltip />} />
                     <ReferenceLine y={0} stroke="#1a2d45" strokeWidth={2} />
-                    <Bar dataKey="ret" name="Return (%)" fill="#64b5f6"
-                      label={false}
-                      radius={[3, 3, 0, 0]}
-                    />
+                    <Bar dataKey="ret" name="Return (%)" fill="#64b5f6" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
 
-            {/* Raw data table */}
             {activeTab === "table" && (
               <div style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "16px 20px", borderBottom: "1px solid #1a2d45", fontSize: 13, fontWeight: 600, color: "#7a9bb5" }}>
