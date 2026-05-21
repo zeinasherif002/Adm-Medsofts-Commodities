@@ -1,6 +1,9 @@
 """
 run_forecast.py - AdmMedSofts Daily Corn Forecast Pipeline
-Trains on clean recent daily data + STU from SnD, predicts today's prices.
+Matches exact model from Corn_Daily_Forcast_final_version.ipynb
+- Trains on monthly SnD data using RidgeCV (same as notebook)
+- Fetches today's CBOT + dollar rate from Yahoo Finance
+- Uploads only today's record to Supabase
 """
 
 import pandas as pd
@@ -10,8 +13,9 @@ import json
 import yfinance as yf
 import os
 from datetime import datetime, timedelta
-from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import RidgeCV
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -29,121 +33,94 @@ HEADERS = {
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-def fetch_market_data(days=90):
-    log("Fetching CBOT corn futures from Yahoo Finance...")
-    end = datetime.today()
-    start = end - timedelta(days=days)
-    corn = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
+def fetch_market_data():
+    log("Fetching today's CBOT corn futures from Yahoo Finance...")
+    end   = datetime.today()
+    start = end - timedelta(days=5)
+    corn  = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
     if corn.empty:
         raise ValueError("Could not fetch CBOT data.")
     if isinstance(corn.columns, pd.MultiIndex):
         corn.columns = [col[0] for col in corn.columns]
     corn = corn[["Open","High","Low","Close"]].copy()
     corn.columns = ["cbot_open","cbot_high","cbot_low","cbot_close"]
-    corn.index.name = "date"
     corn = corn.dropna()
-    log(f"  Got {len(corn)} days. Latest: {corn.index[-1].date()} @ {corn['cbot_close'].iloc[-1]:.2f} c/bu")
+    today_row = corn.iloc[-1]
+    log(f"  Latest: {corn.index[-1].date()} @ {today_row['cbot_close']:.2f} c/bu")
+
+    log("Fetching EGP/USD rate...")
     try:
         egp = yf.download("EGP=X", start=start, end=end, interval="1d", progress=False)
         if isinstance(egp.columns, pd.MultiIndex):
             egp.columns = [col[0] for col in egp.columns]
-        egp = egp[["Close"]].rename(columns={"Close":"dollar_rate"})
-        egp.index.name = "date"
-        corn = corn.join(egp, how="left")
-        corn["dollar_rate"] = corn["dollar_rate"].ffill().bfill()
-        log(f"  Dollar rate: {corn['dollar_rate'].iloc[-1]:.2f} EGP/USD")
+        dollar_rate = float(egp["Close"].dropna().iloc[-1])
+        log(f"  Dollar rate: {dollar_rate:.2f} EGP/USD")
     except:
-        corn["dollar_rate"] = 52.0
-    return corn
+        dollar_rate = 53.0
+        log(f"  Using default dollar rate: {dollar_rate}")
 
-def build_training_data():
-    log("Loading training data...")
+    return corn.index[-1], today_row, dollar_rate
+
+def train_model():
+    log(f"Training model from {SND_FILE} (matching notebook exactly)...")
     snd = pd.read_excel(SND_FILE, sheet_name="SnD")
-    snd = snd.dropna(subset=["STU"])
-    stu = float(snd["STU"].iloc[-1])
-    log(f"  Latest STU from SnD: {stu:.4f}")
-    daily_files = [
-        ("Corn Daily Prices March-April (Updated).xlsx", "CBOT_Close", "ARG Daily Price"),
-        ("Corn April Prices updates.xlsx",               "CBOT_Close", "ARG Daily Price"),
-        ("Corn Daily Prices MAY-JUNE.xlsx",              "Closing CBOT","ARG Daily Price"),
-    ]
-    records = []
-    for fname, cbot_col, arg_col in daily_files:
-        if not os.path.exists(fname):
-            continue
-        try:
-            df = pd.read_excel(fname)
-            df.columns = df.columns.str.strip()
-            fx_col = next((c for c in ["Dollar Rate"] if c in df.columns), None)
-            if cbot_col not in df.columns or arg_col not in df.columns:
-                continue
-            for _, row in df.iterrows():
-                try:
-                    cbot = float(row[cbot_col])
-                    fx   = float(row[fx_col]) if fx_col else 52.0
-                    arg  = float(row[arg_col])
-                    brz_col = next((c for c in ["BRZ Daily Price","BRZ "] if c in df.columns), None)
-                    brz = float(row[brz_col]) if brz_col else arg
-                    if arg > 50000 or arg < 5000: continue
-                    if np.isnan(cbot) or np.isnan(arg) or np.isnan(fx): continue
-                    records.append({"cbot": cbot, "fx": fx, "stu": stu, "arg": arg, "brz": brz})
-                except:
-                    continue
-            log(f"  OK: {fname}")
-        except Exception as e:
-            log(f"  Skip {fname}: {e}")
-    df_train = pd.DataFrame(records)
-    log(f"  Total training rows: {len(df_train)}")
-    log(f"  ARG range: {df_train['arg'].min():.0f} - {df_train['arg'].max():.0f}")
-    return df_train, stu
+    for c in ["Closing CBOT","Dollar Rate","STU","Price ARG","Price BRZ"]:
+        if c in snd.columns:
+            snd[c] = pd.to_numeric(snd[c], errors="coerce").ffill().bfill()
+    hist = snd.dropna(subset=["Closing CBOT","Dollar Rate","STU","Price ARG","Price BRZ"]).copy()
+    log(f"  Training on {len(hist)} monthly rows")
 
-def train_model(df_train):
-    log("Training model...")
-    X = df_train[["cbot","fx","stu"]].values
-    y_arg = df_train["arg"].values
-    y_brz = df_train["brz"].values
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X)
-    m_arg = Ridge(alpha=1.0)
-    m_brz = Ridge(alpha=1.0)
-    m_arg.fit(Xs, y_arg)
-    m_brz.fit(Xs, y_brz)
-    mae = np.mean(np.abs(m_arg.predict(Xs) - y_arg))
-    log(f"  MAE: {mae:.2f} EGP")
-    return m_arg, m_brz, scaler
+    X = hist[["Closing CBOT","Dollar Rate","STU"]]
 
-def run_forecast(corn_df, m_arg, m_brz, scaler, stu):
-    log("Running forecast...")
-    records = []
-    for date, row in corn_df.iterrows():
-        cbot = float(row["cbot_close"])
-        fx   = float(row["dollar_rate"]) if pd.notna(row.get("dollar_rate")) else 52.0
-        X_in = scaler.transform([[cbot, fx, stu]])
-        arg  = float(m_arg.predict(X_in)[0])
-        brz  = float(m_brz.predict(X_in)[0])
-        records.append({
-            "date":         date.strftime("%Y-%m-%d"),
-            "commodity":    "corn",
-            "cbot_open":    round(float(row["cbot_open"]), 4),
-            "cbot_high":    round(float(row["cbot_high"]), 4),
-            "cbot_low":     round(float(row["cbot_low"]),  4),
-            "cbot_close":   round(cbot, 4),
-            "closing_cbot": round(cbot, 4),
-            "dollar_rate":  round(fx, 4),
-            "arg_price":    round(arg, 2),
-            "brz_price":    round(brz, 2),
-        })
-    today = records[-1]
-    log(f"  TODAY ({today['date']}):")
-    log(f"    CBOT:        {today['cbot_close']} c/bu")
-    log(f"    Dollar Rate: {today['dollar_rate']} EGP/USD")
-    log(f"    ARG Price:   {today['arg_price']:,.2f} EGP")
-    log(f"    BRZ Price:   {today['brz_price']:,.2f} EGP")
-    return records
+    def fit_ridge(X, y):
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            ("ridge", RidgeCV(alphas=[0.1, 1.0, 10.0, 50.0]))
+        ]).fit(X, y)
 
-def upload(records):
-    log(f"Uploading {len(records)} records...")
-    resp = requests.post(f"{SUPABASE_URL}/rest/v1/commodity_prices", headers=HEADERS, data=json.dumps(records))
+    ridge_arg = fit_ridge(X, hist["Price ARG"])
+    ridge_brz = fit_ridge(X, hist["Price BRZ"])
+    stu = float(hist["STU"].iloc[-1])
+    log(f"  Latest STU: {stu:.4f}")
+    return ridge_arg, ridge_brz, stu
+
+def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu):
+    log("Running forecast for today...")
+    cbot = float(row["cbot_close"])
+    X_today = pd.DataFrame([{
+        "Closing CBOT": cbot,
+        "Dollar Rate":  dollar_rate,
+        "STU":          stu
+    }])
+    arg = float(ridge_arg.predict(X_today)[0])
+    brz = float(ridge_brz.predict(X_today)[0])
+
+    log(f"  TODAY ({date.date()}):")
+    log(f"    CBOT:        {cbot:.2f} c/bu")
+    log(f"    Dollar Rate: {dollar_rate:.2f} EGP/USD")
+    log(f"    ARG Price:   {arg:,.2f} EGP")
+    log(f"    BRZ Price:   {brz:,.2f} EGP")
+
+    return {
+        "date":         date.strftime("%Y-%m-%d"),
+        "commodity":    "corn",
+        "cbot_open":    round(float(row["cbot_open"]), 4),
+        "cbot_high":    round(float(row["cbot_high"]), 4),
+        "cbot_low":     round(float(row["cbot_low"]),  4),
+        "cbot_close":   round(cbot, 4),
+        "closing_cbot": round(cbot, 4),
+        "dollar_rate":  round(dollar_rate, 4),
+        "arg_price":    round(arg, 2),
+        "brz_price":    round(brz, 2),
+    }
+
+def upload(record):
+    log("Uploading today's record to Supabase...")
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/commodity_prices",
+        headers=HEADERS,
+        data=json.dumps([record])
+    )
     if resp.status_code in (200, 201):
         log("  Upload successful!")
     else:
@@ -154,11 +131,10 @@ def main():
     print("  AdmMedSofts - Daily Corn Forecast Pipeline")
     print(f"  {datetime.today().strftime('%A, %d %B %Y %H:%M')}")
     print("=" * 55)
-    corn_df = fetch_market_data(days=90)
-    df_train, stu = build_training_data()
-    m_arg, m_brz, scaler = train_model(df_train)
-    records = run_forecast(corn_df, m_arg, m_brz, scaler, stu)
-    upload(records)
+    date, row, dollar_rate = fetch_market_data()
+    ridge_arg, ridge_brz, stu = train_model()
+    record = run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu)
+    upload(record)
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
