@@ -6,9 +6,9 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-async function fetchPrices(commodity = "corn", limit = 30) {
+async function fetchPrices(commodity = "corn", limit = 300) {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.${commodity}&order=date.asc&limit=${limit}`,
+    `${SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.${commodity}&order=date.desc&limit=${limit}`,
     { headers: HEADERS }
   );
   return res.json();
