@@ -2,7 +2,7 @@ name: Daily Corn Forecast
 
 on:
   schedule:
-    - cron: '0 6 * * 1-5'  # Every weekday at 8am Cairo time (6am UTC)
+    - cron: '*/5 * * * 1-5'  # Every weekday at 8am Cairo time (6am UTC)
   workflow_dispatch:         # Also allows manual trigger from GitHub
 
 jobs:
