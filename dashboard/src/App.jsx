@@ -41,6 +41,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [lastUpdated, setLastUpdated] = useState(null);
+  useEffect(() => { const interval = setInterval(load, 5 * 60 * 1000); return () => clearInterval(interval); }, [load]);
 
   const load = useCallback(async () => {
     setLoading(true);
