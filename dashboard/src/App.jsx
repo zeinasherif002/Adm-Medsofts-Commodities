@@ -57,7 +57,7 @@ export default function App() {
     return function() { clearInterval(interval); };
   }, [commodity]);
 
-  var latest = data[data.length - 1];
+  var latest = data.reduce(function(a, b) { return a.date > b.date ? a : b; }, data[0]);
   var prev = data[data.length - 2];
   var cbotDelta = latest && prev ? latest.closing_cbot - prev.closing_cbot : 0;
   var cbotPct = prev && prev.closing_cbot ? (cbotDelta / prev.closing_cbot) * 100 : 0;
