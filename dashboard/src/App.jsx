@@ -453,26 +453,47 @@ export default function App() {
 
             {/* KPI Cards */}
             {(activeTab === "overview" || activeTab === "charts" || activeTab === "analysis") && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-                {[
-                  { label: "CBOT Close", value: fmt(latest.closing_cbot), unit: "¢/bu", delta: cbotDelta, pct: cbotPct, accent: "#64b5f6" },
-                  { label: "Day Range", value: fmt(latest.cbot_low) + " – " + fmt(latest.cbot_high), unit: "¢/bu", accent: "#80cbc4" },
-                  { label: "ARG Local Price", value: fmtK(latest.arg_price), unit: "EGP", delta: argDelta, accent: "#a5d6a7" },
-                  { label: "Dollar Rate", value: fmt(latest.dollar_rate), unit: "EGP/USD", accent: "#ce93d8" },
-                ].map(function(card, i) {
-                  return (
-                    <div key={i} style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "18px 20px", borderTop: "3px solid " + card.accent }}>
-                      <div style={{ fontSize: 11, color: "#4a7fa5", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{card.label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: "#e8edf2", lineHeight: 1 }}>{card.value}</div>
-                      <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 4 }}>{card.unit}</div>
-                      {card.delta !== undefined && (
-                        <div style={{ marginTop: 8, fontSize: 12, color: card.delta >= 0 ? "#81c784" : "#e57373", fontWeight: 600 }}>
-                          {card.delta >= 0 ? "▲" : "▼"} {fmt(Math.abs(card.delta))}{card.pct !== undefined && " (" + fmt(Math.abs(card.pct)) + "%)"}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                  {[
+                    { label: "CBOT Close", value: fmt(latest.closing_cbot), unit: "¢/bu", delta: cbotDelta, pct: cbotPct, accent: "#64b5f6" },
+                    { label: "Day Range", value: fmt(latest.cbot_low) + " – " + fmt(latest.cbot_high), unit: "¢/bu", accent: "#80cbc4" },
+                    { label: "ARG Local Price", value: fmtK(latest.arg_price), unit: "EGP", delta: argDelta, accent: "#a5d6a7" },
+                    { label: "Dollar Rate", value: fmt(latest.dollar_rate), unit: "EGP/USD", accent: "#ce93d8" },
+                  ].map(function(card, i) {
+                    return (
+                      <div key={i} style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "18px 20px", borderTop: "3px solid " + card.accent }}>
+                        <div style={{ fontSize: 11, color: "#4a7fa5", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{card.label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#e8edf2", lineHeight: 1 }}>{card.value}</div>
+                        <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 4 }}>{card.unit}</div>
+                        {card.delta !== undefined && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: card.delta >= 0 ? "#81c784" : "#e57373", fontWeight: 600 }}>
+                            {card.delta >= 0 ? "▲" : "▼"} {fmt(Math.abs(card.delta))}{card.pct !== undefined && " (" + fmt(Math.abs(card.pct)) + "%)"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                  {[
+                    { label: "CBOT Next-Day Forecast", value: latest.cbot_predicted ? fmt(latest.cbot_predicted) : "—", unit: "¢/bu predicted", mape: latest.mape_cbot, accent: "#64b5f6" },
+                    { label: "ARG Forecast Accuracy", value: latest.arg_predicted ? fmtK(latest.arg_predicted) : "—", unit: "EGP predicted", mape: latest.mape_arg, accent: "#a5d6a7" },
+                    { label: "BRZ Forecast Accuracy", value: latest.brz_predicted ? fmtK(latest.brz_predicted) : "—", unit: "EGP predicted", mape: latest.mape_brz, accent: "#ffb74d" },
+                  ].map(function(card, i) {
+                    var mapeColor = card.mape !== null && card.mape !== undefined ? (card.mape < 2 ? "#81c784" : card.mape < 5 ? "#ffb74d" : "#ef9a9a") : "#4a7fa5";
+                    return (
+                      <div key={i} style={{ background: "#0b1520", border: "1px solid #1a2d45", borderRadius: 12, padding: "18px 20px", borderTop: "3px solid " + card.accent }}>
+                        <div style={{ fontSize: 11, color: "#4a7fa5", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{card.label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#e8edf2", lineHeight: 1 }}>{card.value}</div>
+                        <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 4 }}>{card.unit}</div>
+                        <div style={{ marginTop: 8, fontSize: 12, color: mapeColor, fontWeight: 600 }}>
+                          {card.mape !== null && card.mape !== undefined ? "MAPE: " + card.mape.toFixed(2) + "%" : "MAPE: accumulating data..."}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
