@@ -218,27 +218,151 @@ export default function App() {
     setAiAnalysis("");
     setActiveTab("analysis");
 
-    var last5 = data.slice(0, 5).map(function(d) {
-      return d.date + ": close=" + d.closing_cbot + ", high=" + d.cbot_high + ", low=" + d.cbot_low + ", ret=" + (d.fut_ret * 100).toFixed(2) + "%";
-    }).join("\n");
+    setTimeout(function() {
+      var report = generateReport();
+      setAiAnalysis(report);
+      setAiLoading(false);
+    }, 800);
+  }
 
-    var prompt = "You are a commodity trading analyst. Analyze this CBOT " + commodity + " futures data and explain in 3-4 sentences: (1) what happened to the price recently, (2) what the technical indicators suggest (RSI=" + (currentRSI ? currentRSI.toFixed(1) : "N/A") + ", MACD histogram=" + (currentMACD && currentMACD.histogram ? currentMACD.histogram.toFixed(4) : "N/A") + ", Z-score=" + zScore.toFixed(2) + ", trend=" + trend + ", support=" + srLevels.support.toFixed(2) + ", resistance=" + srLevels.resistance.toFixed(2) + "), (3) a brief outlook. Be concise and professional.\n\nRecent data:\n" + last5;
+  function generateReport() {
+    if (!latest || prices.length < 5) return "Not enough data for analysis.";
 
-    fetch("https://super-violet-316c.zeina-sherif-0ad.workers.dev", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: prompt })
-    })
-      .then(function(res) { return res.json(); })
-      .then(function(d) {
-        var text = d.result || "Analysis unavailable.";
-        setAiAnalysis(text);
-        setAiLoading(false);
-      })
-      .catch(function(e) {
-        setAiAnalysis("Could not load AI analysis. Please try again.");
-        setAiLoading(false);
-      });
+    var lines = [];
+    var date = latest.date;
+    var cbot = latest.closing_cbot;
+    var prev5 = prices.slice(-6, -1);
+    var avg5 = prev5.reduce(function(a,b){return a+b;},0) / prev5.length;
+    var pct5 = ((cbot - prev5[0]) / prev5[0] * 100);
+    var dayChange = cbotDelta;
+    var dayChangePct = cbotPct;
+
+    // ── Section 1: Price Summary ──────────────────────────
+    lines.push("📊 PRICE SUMMARY — " + date);
+    lines.push("─────────────────────────────────────────");
+    if (dayChange > 0) {
+      lines.push("▲ CBOT closed at " + cbot.toFixed(2) + " ¢/bu, UP " + Math.abs(dayChange).toFixed(2) + " (" + Math.abs(dayChangePct).toFixed(2) + "%) from previous session.");
+    } else if (dayChange < 0) {
+      lines.push("▼ CBOT closed at " + cbot.toFixed(2) + " ¢/bu, DOWN " + Math.abs(dayChange).toFixed(2) + " (" + Math.abs(dayChangePct).toFixed(2) + "%) from previous session.");
+    } else {
+      lines.push("→ CBOT closed flat at " + cbot.toFixed(2) + " ¢/bu, unchanged from previous session.");
+    }
+
+    if (pct5 > 2) {
+      lines.push("Over the past 5 sessions, price has gained " + pct5.toFixed(2) + "% — showing a sustained upward trend.");
+    } else if (pct5 < -2) {
+      lines.push("Over the past 5 sessions, price has lost " + Math.abs(pct5).toFixed(2) + "% — reflecting sustained selling pressure.");
+    } else {
+      lines.push("Over the past 5 sessions, price has moved " + (pct5 >= 0 ? "+" : "") + pct5.toFixed(2) + "% — consolidating in a tight range.");
+    }
+
+    // ── Section 2: Technical Indicators ──────────────────
+    lines.push("");
+    lines.push("📈 TECHNICAL INDICATORS");
+    lines.push("─────────────────────────────────────────");
+
+    // RSI
+    if (currentRSI !== null) {
+      var rsiText = "RSI(14) = " + currentRSI.toFixed(1) + " → ";
+      if (currentRSI < 30) rsiText += "OVERSOLD. Price may be due for a bounce. Consider monitoring for reversal signals.";
+      else if (currentRSI < 45) rsiText += "Bearish territory. Momentum is weak, sellers in control.";
+      else if (currentRSI < 55) rsiText += "Neutral zone. No clear directional bias from momentum.";
+      else if (currentRSI < 70) rsiText += "Bullish territory. Buyers in control with healthy momentum.";
+      else rsiText += "OVERBOUGHT. Price may be stretched — watch for pullback risk.";
+      lines.push(rsiText);
+    }
+
+    // MACD
+    if (currentMACD && currentMACD.histogram !== null) {
+      var macdText = "MACD Histogram = " + currentMACD.histogram.toFixed(4) + " → ";
+      if (currentMACD.histogram > 0 && currentMACD.macd > currentMACD.signal) {
+        macdText += "Bullish crossover. Upward momentum is building.";
+      } else if (currentMACD.histogram < 0 && currentMACD.macd < currentMACD.signal) {
+        macdText += "Bearish crossover. Downward momentum is building.";
+      } else if (currentMACD.histogram > 0) {
+        macdText += "Positive histogram. Mild bullish bias.";
+      } else {
+        macdText += "Negative histogram. Mild bearish bias.";
+      }
+      lines.push(macdText);
+    }
+
+    // Bollinger
+    if (currentBoll && currentBoll.upper !== null) {
+      var bollText = "Bollinger Bands → ";
+      if (cbot > currentBoll.upper) bollText += "Price ABOVE upper band (" + currentBoll.upper.toFixed(2) + "). Potential overbought — watch for mean reversion.";
+      else if (cbot < currentBoll.lower) bollText += "Price BELOW lower band (" + currentBoll.lower.toFixed(2) + "). Potential oversold — watch for bounce.";
+      else bollText += "Price inside bands (Upper: " + currentBoll.upper.toFixed(2) + ", Lower: " + currentBoll.lower.toFixed(2) + "). Normal volatility range.";
+      lines.push(bollText);
+    }
+
+    // Z-Score
+    var zText = "Z-Score = " + zScore.toFixed(2) + " → ";
+    if (Math.abs(zScore) > 2) zText += "⚠ EXTREME move! Price is " + Math.abs(zScore).toFixed(1) + " standard deviations from the mean. Unusual market activity.";
+    else if (Math.abs(zScore) > 1) zText += "Notable deviation from average. Worth monitoring closely.";
+    else zText += "Price within normal statistical range.";
+    lines.push(zText);
+
+    // Moving Averages
+    var ma7val = ma7[ma7.length - 1];
+    var ma21val = ma21[ma21.length - 1];
+    if (ma7val && ma21val) {
+      var maText = "MA7 = " + ma7val.toFixed(2) + " | MA21 = " + ma21val.toFixed(2) + " → ";
+      if (cbot > ma7val && cbot > ma21val && ma7val > ma21val) macdText = "";
+      if (ma7val > ma21val) maText += "Short-term MA above long-term MA. Bullish alignment.";
+      else maText += "Short-term MA below long-term MA. Bearish alignment.";
+      lines.push(maText);
+    }
+
+    // ── Section 3: Support & Resistance ──────────────────
+    lines.push("");
+    lines.push("🎯 KEY LEVELS");
+    lines.push("─────────────────────────────────────────");
+    lines.push("Support:    " + srLevels.support.toFixed(2) + " ¢/bu");
+    lines.push("Resistance: " + srLevels.resistance.toFixed(2) + " ¢/bu");
+    var distSupport = ((cbot - srLevels.support) / srLevels.support * 100).toFixed(1);
+    var distResist  = ((srLevels.resistance - cbot) / cbot * 100).toFixed(1);
+    lines.push("Price is " + distSupport + "% above support and " + distResist + "% below resistance.");
+
+    if (cbot < srLevels.support * 1.01) {
+      lines.push("⚠ Price is testing support — a break below " + srLevels.support.toFixed(2) + " could accelerate selling.");
+    } else if (cbot > srLevels.resistance * 0.99) {
+      lines.push("⚠ Price is testing resistance — a breakout above " + srLevels.resistance.toFixed(2) + " could trigger further buying.");
+    }
+
+    // ── Section 4: Local Market Impact ───────────────────
+    lines.push("");
+    lines.push("🇪🇬 LOCAL MARKET IMPACT (EGP)");
+    lines.push("─────────────────────────────────────────");
+    lines.push("Dollar Rate:   " + latest.dollar_rate.toFixed(2) + " EGP/USD");
+    lines.push("ARG Price:     " + Math.round(latest.arg_price).toLocaleString() + " EGP");
+    lines.push("BRZ Price:     " + Math.round(latest.brz_price).toLocaleString() + " EGP");
+    if (argDelta > 0) {
+      lines.push("ARG price rose by " + Math.abs(argDelta).toFixed(0) + " EGP vs previous session — local buyers face higher costs.");
+    } else if (argDelta < 0) {
+      lines.push("ARG price fell by " + Math.abs(argDelta).toFixed(0) + " EGP vs previous session — slight relief for local buyers.");
+    }
+
+    // ── Section 5: Overall Signal & Outlook ──────────────
+    lines.push("");
+    lines.push("🔔 OVERALL SIGNAL: " + overallSignal);
+    lines.push("─────────────────────────────────────────");
+    if (overallSignal === "BUY") {
+      lines.push("Majority of indicators point BULLISH. (" + buyCount + " buy signals vs " + sellCount + " sell signals)");
+      lines.push("Outlook: Upward bias expected in the near term. Watch resistance at " + srLevels.resistance.toFixed(2) + ".");
+    } else if (overallSignal === "SELL") {
+      lines.push("Majority of indicators point BEARISH. (" + sellCount + " sell signals vs " + buyCount + " buy signals)");
+      lines.push("Outlook: Downward pressure likely. Watch support at " + srLevels.support.toFixed(2) + ".");
+    } else {
+      lines.push("Mixed signals — market in consolidation phase. (" + buyCount + " buy / " + sellCount + " sell)");
+      lines.push("Outlook: Sideways movement expected. Wait for a clear breakout before taking a position.");
+    }
+
+    lines.push("");
+    lines.push("─────────────────────────────────────────");
+    lines.push("Generated by AdmMedSofts Commodity Intelligence");
+
+    return lines.join("\n");
   }
 
   var currentCommodity = COMMODITIES.find(function(c) { return c.id === commodity; });
