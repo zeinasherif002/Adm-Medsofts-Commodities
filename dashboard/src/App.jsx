@@ -374,15 +374,15 @@ export default function App() {
             {(activeTab==="overview"||activeTab==="charts"||activeTab==="analysis")&&(
               <div style={{marginBottom:20}}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:12}}>
-                  <KpiCard label="CBOT Close" value={fmt(latest.closing_cbot)} unit="¢/bu" accentColor={T.accent} delta={cbotDelta} pct={cbotPct} />
-                  <KpiCard label="ARG Local Price" value={fmtK(latest.arg_price)} unit="EGP" accentColor={T.green} delta={argDelta} />
-                  <KpiCard label="Dollar Rate" value={fmt(latest.dollar_rate)} unit="EGP/USD" accentColor={T.blue} />
-                  <KpiCard label="RSI (14)" value={currentRSI?currentRSI.toFixed(1):"—"} unit={currentRSI?(currentRSI<30?"OVERSOLD":currentRSI>70?"OVERBOUGHT":"NEUTRAL"):""} accentColor={currentRSI?(currentRSI<30?T.green:currentRSI>70?T.red:T.accent):T.accent} />
+                  <KpiCard colors={T} label="CBOT Close" value={fmt(latest.closing_cbot)} unit="¢/bu" accentColor={T.accent} delta={cbotDelta} pct={cbotPct} />
+                  <KpiCard colors={T} label="ARG Local Price" value={fmtK(latest.arg_price)} unit="EGP" accentColor={T.green} delta={argDelta} />
+                  <KpiCard colors={T} label="Dollar Rate" value={fmt(latest.dollar_rate)} unit="EGP/USD" accentColor={T.blue} />
+                  <KpiCard colors={T} label="RSI (14)" value={currentRSI?currentRSI.toFixed(1):"—"} unit={currentRSI?(currentRSI<30?"OVERSOLD":currentRSI>70?"OVERBOUGHT":"NEUTRAL"):""} accentColor={currentRSI?(currentRSI<30?T.green:currentRSI>70?T.red:T.accent):T.accent} />
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-                  <KpiCard label="CBOT Next-Day Forecast" value={latest.cbot_predicted?fmt(latest.cbot_predicted):"—"} unit="¢/bu predicted" accentColor={T.purple} mape={latest.mape_cbot} />
-                  <KpiCard label="ARG Forecast Accuracy" value={latest.arg_predicted?fmtK(latest.arg_predicted):"—"} unit="EGP predicted" accentColor={T.green} mape={latest.mape_arg} />
-                  <KpiCard label="BRZ Forecast Accuracy" value={latest.brz_predicted?fmtK(latest.brz_predicted):"—"} unit="EGP predicted" accentColor={T.cyan} mape={latest.mape_brz} />
+                  <KpiCard colors={T} label="CBOT Next-Day Forecast" value={latest.cbot_predicted?fmt(latest.cbot_predicted):"—"} unit="¢/bu predicted" accentColor={T.purple} mape={latest.mape_cbot} />
+                  <KpiCard colors={T} label="ARG Forecast Accuracy" value={latest.arg_predicted?fmtK(latest.arg_predicted):"—"} unit="EGP predicted" accentColor={T.green} mape={latest.mape_arg} />
+                  <KpiCard colors={T} label="BRZ Forecast Accuracy" value={latest.brz_predicted?fmtK(latest.brz_predicted):"—"} unit="EGP predicted" accentColor={T.cyan} mape={latest.mape_brz} />
                 </div>
               </div>
             )}
