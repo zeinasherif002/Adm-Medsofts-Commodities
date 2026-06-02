@@ -60,6 +60,63 @@ def xgb_forecast_next(series):
         log(f"  XGBoost failed: {e} — using rolling mean fallback")
         return float(series.rolling(5).mean().iloc[-1])
 
+def xgb_forecast_5days(series):
+    """Forecast next 5 trading days using XGBoost."""
+    try:
+        from xgboost import XGBRegressor
+        feat = make_lag_features(series)
+        X, y = feat.drop('y', axis=1), feat['y']
+        mdl = XGBRegressor(n_estimators=300, learning_rate=0.05,
+                           max_depth=4, subsample=0.8,
+                           colsample_bytree=0.8, random_state=42,
+                           verbosity=0)
+        mdl.fit(X, y)
+        hist = list(series.values)
+        preds = []
+        for _ in range(5):
+            tmp = pd.Series(hist)
+            row = make_lag_features(tmp).iloc[[-1]].drop('y', axis=1)
+            p = float(mdl.predict(row)[0])
+            preds.append(p)
+            hist.append(p)
+        return preds
+    except Exception as e:
+        log(f"  XGBoost 5-day failed: {e}")
+        last = float(series.iloc[-1])
+        return [last] * 5
+
+def upload_weekly_forecast(date, cbot_preds, arg_preds, brz_preds, commodity="corn"):
+    """Upload 5-day forecast to weekly_forecast table."""
+    from datetime import timedelta
+    import pandas as pd
+    log("Uploading weekly forecast...")
+    # Generate next 5 business days
+    next_days = []
+    d = date
+    while len(next_days) < 5:
+        d = d + timedelta(days=1)
+        if d.weekday() < 5:  # Monday-Friday only
+            next_days.append(d)
+    records = []
+    for i, forecast_date in enumerate(next_days):
+        records.append({
+            "generated_date": date.strftime("%Y-%m-%d"),
+            "forecast_date": forecast_date.strftime("%Y-%m-%d"),
+            "commodity": commodity,
+            "cbot_forecast": round(cbot_preds[i], 4),
+            "arg_forecast": round(arg_preds[i], 2),
+            "brz_forecast": round(brz_preds[i], 2),
+        })
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/weekly_forecast",
+        headers=HEADERS,
+        data=json.dumps(records)
+    )
+    if resp.status_code in (200, 201):
+        log("  Weekly forecast uploaded!")
+    else:
+        log(f"  Error: {resp.status_code} {resp.text}")
+
 def fetch_market_data():
     log("Fetching CBOT corn futures from Yahoo Finance...")
     end   = datetime.today()
@@ -203,6 +260,18 @@ def main():
     yesterday_record = fetch_yesterday_predictions()
     record = run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record)
     upload(record)
+
+    # 5-day weekly forecast
+    log("Generating 5-day weekly forecast...")
+    close_series = corn_series["cbot_close"]
+    cbot_5 = xgb_forecast_5days(close_series)
+    arg_5 = []
+    brz_5 = []
+    for cbot_pred in cbot_5:
+        X_pred = pd.DataFrame([{"Closing CBOT": cbot_pred, "Dollar Rate": dollar_rate, "STU": stu}])
+        arg_5.append(float(ridge_arg.predict(X_pred)[0]))
+        brz_5.append(float(ridge_brz.predict(X_pred)[0]))
+    upload_weekly_forecast(date, cbot_5, arg_5, brz_5)
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
