@@ -112,20 +112,20 @@ function Tooltip2(props) {
 function KpiCard(props) {
   var label=props.label,value=props.value,unit=props.unit,accentColor=props.accentColor,delta=props.delta,pct=props.pct,mape=props.mape;
   var isUp = delta !== undefined && delta >= 0;
-  var deltaColor = delta === undefined ? T.textSub : delta > 0 ? T.green : delta < 0 ? T.red : T.textSub;
+  var deltaColor = delta === undefined ? colors.textSub : delta > 0 ? colors.green : delta < 0 ? colors.red : colors.textSub;
   return (
-    <div style={{background:T.card,border:"1px solid "+T.cardBorder,borderRadius:12,padding:"16px 18px",borderTop:"2px solid "+accentColor,position:"relative",overflow:"hidden"}}>
+    <div style={{background:colors.card,border:"1px solid "+colors.cardBorder,borderRadius:12,padding:"16px 18px",borderTop:"2px solid "+accentColor,position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:0,right:0,width:60,height:60,borderRadius:"0 12px 0 100%",background:accentColor,opacity:0.07}}/>
-      <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.12em",color:T.textSub,marginBottom:8}}>{label}</div>
+      <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.12em",color:colors.textSub,marginBottom:8}}>{label}</div>
       <div style={{fontSize:24,fontWeight:900,color:"#fff",fontFamily:"monospace",letterSpacing:"-0.5px",lineHeight:1}}>{value}</div>
-      <div style={{fontSize:11,color:T.textMuted,marginTop:3,marginBottom:8,fontFamily:"monospace"}}>{unit}</div>
+      <div style={{fontSize:11,color:colors.textMuted,marginTop:3,marginBottom:8,fontFamily:"monospace"}}>{unit}</div>
       {delta !== undefined && (
         <div style={{fontSize:11,fontWeight:700,color:deltaColor,fontFamily:"monospace"}}>
           {delta>0?"+":delta<0?"-":""} {fmt(Math.abs(delta))}{pct!==undefined?" ("+fmt(Math.abs(pct))+"%)":""}
         </div>
       )}
       {mape !== undefined && (
-        <div style={{fontSize:10,color:mape!==null?(mape<2?T.green:mape<5?T.accent:T.red):T.textMuted,marginTop:4,fontFamily:"monospace"}}>
+        <div style={{fontSize:10,color:mape!==null?(mape<2?colors.green:mape<5?colors.accent:colors.red):colors.textMuted,marginTop:4,fontFamily:"monospace"}}>
           MAPE: {mape!==null?mape.toFixed(2)+"%":"accumulating..."}
         </div>
       )}
