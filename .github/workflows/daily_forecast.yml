@@ -1,26 +1,19 @@
 name: Daily Corn Forecast
-
 on:
   schedule:
-    - cron: '*/5 * * * 1-5'  # Every weekday at 8am Cairo time (6am UTC)
-  workflow_dispatch:         # Also allows manual trigger from GitHub
+    - cron: '0 20 * * 1-5'  # Every weekday at 11 PM Cairo (8 PM UTC) — after CBOT closes
+  workflow_dispatch:
 
 jobs:
   forecast:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: Install dependencies
-        run: pip install pandas openpyxl scikit-learn yfinance requests
-
+        run: pip install pandas openpyxl scikit-learn yfinance requests xgboost
       - name: Run forecast
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python run_forecast.py
