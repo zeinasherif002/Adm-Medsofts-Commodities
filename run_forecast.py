@@ -90,6 +90,11 @@ def upload_weekly_forecast(date, cbot_preds, arg_preds, brz_preds, commodity="co
     from datetime import timedelta
     import pandas as pd
     log("Uploading weekly forecast...")
+    # Delete old forecasts first
+    requests.delete(
+        f"{SUPABASE_URL}/rest/v1/weekly_forecast?commodity=eq.{commodity}",
+        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    )
     # Generate next 5 business days
     next_days = []
     d = date
@@ -165,6 +170,20 @@ def train_model():
     log(f"  Latest STU: {stu:.4f}")
     return ridge_arg, ridge_brz, stu
 
+def fetch_yesterday_close():
+    """Fetch yesterday closing price to calculate return."""
+    try:
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.corn&order=date.desc&limit=2&select=date,closing_cbot",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        )
+        rows = resp.json()
+        if len(rows) >= 2:
+            return float(rows[1]["closing_cbot"])
+        return None
+    except:
+        return None
+
 def fetch_yesterday_predictions():
     try:
         resp = requests.get(
@@ -183,7 +202,7 @@ def calc_mape(actual, predicted):
         return None
     return round(abs((actual - predicted) / actual) * 100, 4)
 
-def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record):
+def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record, yesterday_close=None):
     log("Running forecast...")
     cbot = float(row["cbot_close"])
     X_today = pd.DataFrame([{"Closing CBOT": cbot, "Dollar Rate": dollar_rate, "STU": stu}])
@@ -227,6 +246,7 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
         "dollar_rate":    round(dollar_rate, 4),
         "arg_price":      round(arg, 2),
         "brz_price":      round(brz, 2),
+        "fut_ret": round((cbot - yesterday_close) / yesterday_close, 6) if yesterday_close else None,
         "cbot_predicted": round(cbot_next, 4),
         "arg_predicted":  round(arg, 2),
         "brz_predicted":  round(brz, 2),
@@ -258,7 +278,8 @@ def main():
     date, row, dollar_rate, corn_series = fetch_market_data()
     ridge_arg, ridge_brz, stu = train_model()
     yesterday_record = fetch_yesterday_predictions()
-    record = run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record)
+    yesterday_close = fetch_yesterday_close()
+    record = run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record, yesterday_close)
     upload(record)
 
     # 5-day weekly forecast

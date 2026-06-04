@@ -1,7 +1,8 @@
 name: Daily Corn Forecast
 on:
   schedule:
-    - cron: '0 20 * * 1-5'  # Every weekday at 11 PM Cairo (8 PM UTC) — after CBOT closes
+    - cron: '30 13,14,15,16,17,18,19 * * 1-5'  # Every 30min 3:30-9:30 PM Cairo (UTC+3 = UTC 13-19)
+    - cron: '0 20 * * 1-5'                        # Final run 11 PM Cairo after close
   workflow_dispatch:
 
 jobs:
