@@ -15,6 +15,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install pandas openpyxl scikit-learn yfinance requests xgboost
+        run: pip install pandas openpyxl scikit-learn yfinance requests xgboost statsmodels
       - name: Run forecast
         run: python run_forecast.py
