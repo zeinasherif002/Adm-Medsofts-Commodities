@@ -44,21 +44,17 @@ def make_lag_features(series, lags=20):
 
 def xgb_forecast_next(series):
     try:
-        from xgboost import XGBRegressor
-        feat = make_lag_features(series)
-        X, y = feat.drop('y', axis=1), feat['y']
-        mdl = XGBRegressor(n_estimators=300, learning_rate=0.05,
-                           max_depth=4, subsample=0.8,
-                           colsample_bytree=0.8, random_state=42,
-                           verbosity=0)
-        mdl.fit(X, y)
-        hist = list(series.values)
-        tmp = pd.Series(hist)
-        row = make_lag_features(tmp).iloc[[-1]].drop('y', axis=1)
-        return float(mdl.predict(row)[0])
+        from statsmodels.tsa.arima.model import ARIMA
+        import warnings
+        warnings.filterwarnings("ignore")
+        s = series.dropna().tail(60)
+        model = ARIMA(s, order=(2, 1, 2))
+        result = model.fit()
+        forecast = result.forecast(steps=1)
+        return float(forecast.iloc[0])
     except Exception as e:
-        log(f"  XGBoost failed: {e} — using rolling mean fallback")
-        return float(series.rolling(5).mean().iloc[-1])
+        log(f"  ARIMA failed: {e}, using last price")
+        return float(series.iloc[-1])
 
 def xgb_forecast_5days(series):
     """Forecast next 5 trading days using XGBoost."""
