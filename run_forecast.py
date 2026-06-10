@@ -286,19 +286,39 @@ def fetch_market_data_wheat():
 def train_model_wheat():
     log("Training Ridge model from Wheat.xlsx...")
     snd = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
-    for c in ["Closing CBOT","Dollar Rate","STU","Price 11.5%","Price 12.5%"]:
+    snd.columns = snd.columns.astype(str).str.strip()
+    # Replace zeros with NaN
+    num_cols = snd.select_dtypes(include=[np.number]).columns
+    snd[num_cols] = snd[num_cols].replace(0, np.nan)
+    for c in ["Closing CBOT","Dollar Rate","STU","Local Fees","Imports","Demand","Price 11.5%","Price 12.5%"]:
         if c in snd.columns:
-            snd[c] = pd.to_numeric(snd[c], errors="coerce")
+            snd[c] = pd.to_numeric(snd[c], errors="coerce").ffill().bfill()
+    # Fill defaults
+    if "Local Fees" not in snd.columns or snd["Local Fees"].isna().all():
+        snd["Local Fees"] = 600
+    # Compute Replacement
+    snd["Replacement"] = (snd["Closing CBOT"] * snd["Dollar Rate"] / 27.216) + snd["Local Fees"]
+    # Compute STU if missing
+    if snd["STU"].isna().any():
+        snd["STU"] = snd["STU"].fillna(snd["Ending Stock"] / snd["Demand"])
     hist = snd.dropna(subset=["Closing CBOT","Dollar Rate","STU","Price 11.5%","Price 12.5%"]).copy()
     log(f"  Training on {len(hist)} monthly rows")
-    X = hist[["Closing CBOT","Dollar Rate","STU"]]
+    feature_cols = ["Closing CBOT","Dollar Rate","STU","Local Fees","Replacement"]
+    # Add Imports and Demand if available
+    if "Imports" in hist.columns and hist["Imports"].notna().sum() > 5:
+        feature_cols.append("Imports")
+    if "Demand" in hist.columns and hist["Demand"].notna().sum() > 5:
+        feature_cols.append("Demand")
+    feature_cols = [c for c in feature_cols if c in hist.columns]
+    X = hist[feature_cols].fillna(hist[feature_cols].mean())
     def fit_ridge(X, y):
-        return Pipeline([("scaler", StandardScaler()),("ridge", RidgeCV(alphas=[0.1,1.0,10.0,50.0]))]).fit(X, y)
+        return Pipeline([("scaler", StandardScaler()),("ridge", RidgeCV(alphas=[0.01,0.1,1.0,10.0,50.0]))]).fit(X, y)
     ridge_115 = fit_ridge(X, hist["Price 11.5%"])
     ridge_125 = fit_ridge(X, hist["Price 12.5%"])
     stu = float(hist["STU"].iloc[-1])
     log(f"  Latest STU: {stu:.4f}")
-    return ridge_115, ridge_125, stu
+    log(f"  Features used: {feature_cols}")
+    return ridge_115, ridge_125, stu, feature_cols
 
 def main():
     print("=" * 55)
@@ -324,9 +344,11 @@ def main():
         print()
         log("Starting wheat forecast...")
         w_date, w_row, wheat_series = fetch_market_data_wheat()
-        ridge_115, ridge_125, w_stu = train_model_wheat()
+        ridge_115, ridge_125, w_stu, w_features = train_model_wheat()
         w_cbot = float(w_row["cbot_close"])
-        X_w = pd.DataFrame([{"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu}])
+        w_replacement = (w_cbot * dollar_rate / 27.216) + 600
+        X_w_dict = {"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_replacement, "Imports": 1200000, "Demand": 1000000}
+        X_w = pd.DataFrame([[X_w_dict.get(f, 0) for f in w_features]], columns=w_features)
         w_arg = float(ridge_115.predict(X_w)[0])
         w_brz = float(ridge_125.predict(X_w)[0])
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
@@ -355,8 +377,13 @@ def main():
         else:
             log(f"  Wheat error: {resp.status_code} {resp.text}")
         w_cbot_5 = xgb_forecast_5days(wheat_series["cbot_close"])
-        w_arg_5 = [float(ridge_115.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu}]))[0]) for p in w_cbot_5]
-        w_brz_5 = [float(ridge_125.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu}]))[0]) for p in w_cbot_5]
+        w_arg_5 = []
+        w_brz_5 = []
+        for p in w_cbot_5:
+            w_rep = (p * dollar_rate / 27.216) + 600
+            X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_rep, "Imports": 1200000, "Demand": 1000000}.get(f, 0) for f in w_features]], columns=w_features)
+            w_arg_5.append(float(ridge_115.predict(X_wp)[0]))
+            w_brz_5.append(float(ridge_125.predict(X_wp)[0]))
         upload_weekly_forecast(w_date, w_cbot_5, w_arg_5, w_brz_5, commodity="wheat")
     except Exception as e:
         log(f"  Wheat forecast failed: {e}")
