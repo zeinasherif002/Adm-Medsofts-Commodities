@@ -266,29 +266,101 @@ def upload(record):
     else:
         log(f"  Error: {resp.status_code} {resp.text}")
 
+
+def fetch_market_data_wheat():
+    log("Fetching CBOT wheat futures from Yahoo Finance...")
+    end = datetime.today()
+    start = end - timedelta(days=60)
+    wheat = yf.download("ZW=F", start=start, end=end, interval="1d", progress=False)
+    if wheat.empty:
+        raise ValueError("Could not fetch wheat data.")
+    if isinstance(wheat.columns, pd.MultiIndex):
+        wheat.columns = [col[0] for col in wheat.columns]
+    wheat = wheat[["Open","High","Low","Close"]].copy()
+    wheat.columns = ["cbot_open","cbot_high","cbot_low","cbot_close"]
+    wheat = wheat.dropna()
+    today_row = wheat.iloc[-1]
+    log(f"  Latest wheat: {wheat.index[-1].date()} @ {today_row['cbot_close']:.2f} c/bu")
+    return wheat.index[-1], today_row, wheat
+
+def train_model_wheat():
+    log("Training Ridge model from Wheat.xlsx...")
+    snd = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
+    for c in ["Closing CBOT","Dollar Rate","STU","Price 11.5%","Price 12.5%"]:
+        if c in snd.columns:
+            snd[c] = pd.to_numeric(snd[c], errors="coerce")
+    hist = snd.dropna(subset=["Closing CBOT","Dollar Rate","STU","Price 11.5%","Price 12.5%"]).copy()
+    log(f"  Training on {len(hist)} monthly rows")
+    X = hist[["Closing CBOT","Dollar Rate","STU"]]
+    def fit_ridge(X, y):
+        return Pipeline([("scaler", StandardScaler()),("ridge", RidgeCV(alphas=[0.1,1.0,10.0,50.0]))]).fit(X, y)
+    ridge_115 = fit_ridge(X, hist["Price 11.5%"])
+    ridge_125 = fit_ridge(X, hist["Price 12.5%"])
+    stu = float(hist["STU"].iloc[-1])
+    log(f"  Latest STU: {stu:.4f}")
+    return ridge_115, ridge_125, stu
+
 def main():
     print("=" * 55)
-    print("  AdmMedSofts - Daily Corn Forecast Pipeline")
+    print("  AdmMedSofts - Daily Forecast Pipeline")
     print(f"  {datetime.today().strftime('%A, %d %B %Y %H:%M')}")
     print("=" * 55)
+
+    # CORN
     date, row, dollar_rate, corn_series = fetch_market_data()
     ridge_arg, ridge_brz, stu = train_model()
     yesterday_record = fetch_yesterday_predictions()
     yesterday_close = fetch_yesterday_close()
     record = run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series, yesterday_record, yesterday_close)
     upload(record)
+    log("Generating 5-day corn weekly forecast...")
+    cbot_5 = xgb_forecast_5days(corn_series["cbot_close"])
+    arg_5 = [float(ridge_arg.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": stu}]))[0]) for p in cbot_5]
+    brz_5 = [float(ridge_brz.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": stu}]))[0]) for p in cbot_5]
+    upload_weekly_forecast(date, cbot_5, arg_5, brz_5, commodity="corn")
 
-    # 5-day weekly forecast
-    log("Generating 5-day weekly forecast...")
-    close_series = corn_series["cbot_close"]
-    cbot_5 = xgb_forecast_5days(close_series)
-    arg_5 = []
-    brz_5 = []
-    for cbot_pred in cbot_5:
-        X_pred = pd.DataFrame([{"Closing CBOT": cbot_pred, "Dollar Rate": dollar_rate, "STU": stu}])
-        arg_5.append(float(ridge_arg.predict(X_pred)[0]))
-        brz_5.append(float(ridge_brz.predict(X_pred)[0]))
-    upload_weekly_forecast(date, cbot_5, arg_5, brz_5)
+    # WHEAT
+    try:
+        print()
+        log("Starting wheat forecast...")
+        w_date, w_row, wheat_series = fetch_market_data_wheat()
+        ridge_115, ridge_125, w_stu = train_model_wheat()
+        w_cbot = float(w_row["cbot_close"])
+        X_w = pd.DataFrame([{"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu}])
+        w_arg = float(ridge_115.predict(X_w)[0])
+        w_brz = float(ridge_125.predict(X_w)[0])
+        w_next = xgb_forecast_next(wheat_series["cbot_close"])
+        w_record = {
+            "date": w_date.strftime("%Y-%m-%d"),
+            "commodity": "wheat",
+            "cbot_open": round(float(w_row["cbot_open"]), 4),
+            "cbot_high": round(float(w_row["cbot_high"]), 4),
+            "cbot_low": round(float(w_row["cbot_low"]), 4),
+            "cbot_close": round(w_cbot, 4),
+            "closing_cbot": round(w_cbot, 4),
+            "dollar_rate": round(dollar_rate, 4),
+            "arg_price": round(w_arg, 2),
+            "brz_price": round(w_brz, 2),
+            "cbot_predicted": round(w_next, 4),
+            "arg_predicted": round(w_arg, 2),
+            "brz_predicted": round(w_brz, 2),
+        }
+        requests.delete(
+            f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{w_date.strftime('%Y-%m-%d')}&commodity=eq.wheat",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        )
+        resp = requests.post(f"{SUPABASE_URL}/rest/v1/commodity_prices", headers=HEADERS, data=json.dumps([w_record]))
+        if resp.status_code in (200, 201):
+            log("  Wheat upload successful!")
+        else:
+            log(f"  Wheat error: {resp.status_code} {resp.text}")
+        w_cbot_5 = xgb_forecast_5days(wheat_series["cbot_close"])
+        w_arg_5 = [float(ridge_115.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu}]))[0]) for p in w_cbot_5]
+        w_brz_5 = [float(ridge_125.predict(pd.DataFrame([{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu}]))[0]) for p in w_cbot_5]
+        upload_weekly_forecast(w_date, w_cbot_5, w_arg_5, w_brz_5, commodity="wheat")
+    except Exception as e:
+        log(f"  Wheat forecast failed: {e}")
+
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
