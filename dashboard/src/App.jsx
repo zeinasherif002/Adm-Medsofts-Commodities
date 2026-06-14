@@ -56,7 +56,7 @@ export default function App() {
       .catch(function(e){console.error("News error:",e);setNewsLoad(false);});
   }
 
-  function exportToExcel(){
+  function exportToExcel(type){
     var XLSX = window.XLSX;
     
     // Sheet 1: Daily Prices
@@ -76,9 +76,13 @@ export default function App() {
     });
     
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), 'Daily Prices');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wf), 'Weekly Forecast');
-    XLSX.writeFile(wb, 'AdmMedSofts_'+commodity+'_'+L.date+'.xlsx');
+    if(type==="daily"){
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Daily Prices");
+      XLSX.writeFile(wb, "AdmMedSofts_"+commodity+"_Daily_"+L.date+".xlsx");
+    } else {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wf), "Weekly Forecast");
+      XLSX.writeFile(wb, "AdmMedSofts_"+commodity+"_Forecast_"+L.date+".xlsx");
+    }
   }
 
   function loadData(c){setLoading(true);fetch(SUPABASE_URL+"/rest/v1/commodity_prices?commodity=eq."+c+"&order=date.desc&limit=60",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setData(rows);setUpdated(new Date());setLoading(false);}).catch(function(e){console.error(e);setLoading(false);});}
@@ -133,7 +137,7 @@ export default function App() {
         <div style={{padding:"22px 20px 18px",borderBottom:"1px solid "+C.border}}><div style={{display:"flex",alignItems:"center",gap:12}}><div><img src="/media.jpg" alt="ADM MedSofts" style={{height:32,objectFit:"contain",filter:"none"}}/><div style={{fontSize:10,color:C.sub,marginTop:2}}>Commodity Intelligence</div></div></div></div>
         <div style={{padding:"18px 14px 8px"}}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.14em",marginBottom:10,paddingLeft:6}}>Markets</div>{COMMODITIES.map(function(c){var active=commodity===c.id;return(<button key={c.id} onClick={function(){setCommodity(c.id);}} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",marginBottom:2,background:active?"linear-gradient(135deg,rgba(79,142,247,0.2),rgba(157,124,248,0.1))":"transparent",color:active?C.blue:C.sub,fontWeight:active?700:400,fontSize:13,textAlign:"left",borderLeft:active?"3px solid "+C.blue:"3px solid transparent"}}><span>{c.label}</span>{c.id==="soybeans"&&<span style={{fontSize:9,color:C.muted,border:"1px solid "+C.border,padding:"1px 7px",borderRadius:5}}>Soon</span>}</button>);})}</div>
         <div style={{padding:"8px 14px"}}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.14em",marginBottom:10,paddingLeft:6}}>Views</div>{nav.map(function(item){var id=item[0],label=item[1],active=tab===id;return(<button key={id} onClick={function(){setTab(id);}} style={{width:"100%",padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",marginBottom:2,background:active?"linear-gradient(135deg,rgba(79,142,247,0.2),rgba(157,124,248,0.1))":"transparent",color:active?C.blue:C.sub,fontWeight:active?700:400,fontSize:13,textAlign:"left",borderLeft:active?"3px solid "+C.blue:"3px solid transparent"}}>{label}</button>);})}</div>
-        <div style={{marginTop:"auto",padding:"14px 14px 20px",borderTop:"1px solid "+C.border}}><button onClick={function(){loadData(commodity);loadWeekly(commodity);}} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1px solid "+C.border,background:"transparent",color:C.sub,fontSize:11,cursor:"pointer",marginBottom:8,textAlign:"left",fontWeight:500}}>Refresh Data</button><button onClick={exportToExcel} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1px solid rgba(92,184,92,0.5)",background:"rgba(92,184,92,0.08)",color:C.green,fontSize:11,cursor:"pointer",marginBottom:10,textAlign:"left",fontWeight:600}}>Export to Excel</button><button onClick={runAI} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,"+C.blue+","+C.purple+")",color:"#fff",fontSize:12,cursor:"pointer",fontWeight:700,boxShadow:"0 4px 16px rgba(79,142,247,0.35)"}}>Run AI Analysis</button>{updated&&<div style={{fontSize:9,color:C.muted,marginTop:10,textAlign:"center"}}>Updated {updated.toLocaleTimeString()}</div>}</div>
+        <div style={{marginTop:"auto",padding:"14px 14px 20px",borderTop:"1px solid "+C.border}}><button onClick={function(){loadData(commodity);loadWeekly(commodity);}} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1px solid "+C.border,background:"transparent",color:C.sub,fontSize:11,cursor:"pointer",marginBottom:8,textAlign:"left",fontWeight:500}}>Refresh Data</button><button onClick={function(){exportToExcel("daily");}} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1px solid rgba(92,184,92,0.5)",background:"rgba(92,184,92,0.08)",color:C.green,fontSize:11,cursor:"pointer",marginBottom:6,textAlign:"left",fontWeight:600}}>Export Daily Prices</button><button onClick={function(){exportToExcel("forecast");}} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1px solid rgba(92,184,92,0.5)",background:"rgba(92,184,92,0.08)",color:C.green,fontSize:11,cursor:"pointer",marginBottom:10,textAlign:"left",fontWeight:600}}>Export Weekly Forecast</button><button onClick={runAI} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,"+C.blue+","+C.purple+")",color:"#fff",fontSize:12,cursor:"pointer",fontWeight:700,boxShadow:"0 4px 16px rgba(79,142,247,0.35)"}}>Run AI Analysis</button>{updated&&<div style={{fontSize:9,color:C.muted,marginTop:10,textAlign:"center"}}>Updated {updated.toLocaleTimeString()}</div>}</div>
       </div>
       <div style={{marginLeft:230,flex:1,padding:"28px 32px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}><div><h1 style={{fontSize:24,fontWeight:900,margin:0,color:C.text,letterSpacing:"-0.5px"}}>{cc?cc.label:""} Market</h1><div style={{fontSize:12,color:C.sub,marginTop:4}}>CBOT Futures · EGP Local Prices · {L?L.date:"—"}</div></div><div style={{display:"flex",gap:8,alignItems:"center"}}>
