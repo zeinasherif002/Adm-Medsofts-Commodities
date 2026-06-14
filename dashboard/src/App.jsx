@@ -56,8 +56,40 @@ export default function App() {
       .catch(function(e){console.error("News error:",e);setNewsLoad(false);});
   }
 
+  function exportToExcel(){
+    var XLSX = window.XLSX;
+    
+    // Sheet 1: Daily Prices
+    var daily = [[
+      'Date','CBOT Close (c/bu)','Open','High','Low','ARG Price (EGP)','BRZ Price (EGP)','Dollar Rate','CBOT Forecast','ARG Forecast','BRZ Forecast','MAPE CBOT%','MAPE ARG%','MAPE BRZ%'
+    ],[
+      L.date, L.closing_cbot, L.cbot_open, L.cbot_high, L.cbot_low,
+      L.arg_price, L.brz_price, L.dollar_rate,
+      L.cbot_predicted||'', L.arg_predicted||'', L.brz_predicted||'',
+      L.mape_cbot||'', L.mape_arg||'', L.mape_brz||''
+    ]];
+    
+    // Sheet 2: Weekly Forecast
+    var wf = [['Date','CBOT Forecast (c/bu)','ARG Forecast (EGP)','BRZ Forecast (EGP)']];
+    weekly.forEach(function(row){
+      wf.push([row.forecast_date, row.cbot_forecast, row.arg_forecast, row.brz_forecast]);
+    });
+    
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), 'Daily Prices');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wf), 'Weekly Forecast');
+    XLSX.writeFile(wb, 'AdmMedSofts_'+commodity+'_'+L.date+'.xlsx');
+  }
+
   function loadData(c){setLoading(true);fetch(SUPABASE_URL+"/rest/v1/commodity_prices?commodity=eq."+c+"&order=date.desc&limit=60",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setData(rows);setUpdated(new Date());setLoading(false);}).catch(function(e){console.error(e);setLoading(false);});}
   function loadWeekly(c){fetch(SUPABASE_URL+"/rest/v1/weekly_forecast?commodity=eq."+c+"&order=forecast_date.asc&limit=10",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setWeekly(rows);}).catch(function(e){console.error(e);});}
+  useEffect(function(){
+      var script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+      document.head.appendChild(script);
+    }
+  },[]);
+
   useEffect(function(){loadData(commodity);loadWeekly(commodity);var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
 
   var L=data[0],P=data[1];
