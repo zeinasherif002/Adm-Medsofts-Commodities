@@ -84,10 +84,9 @@ export default function App() {
   function loadData(c){setLoading(true);fetch(SUPABASE_URL+"/rest/v1/commodity_prices?commodity=eq."+c+"&order=date.desc&limit=60",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setData(rows);setUpdated(new Date());setLoading(false);}).catch(function(e){console.error(e);setLoading(false);});}
   function loadWeekly(c){fetch(SUPABASE_URL+"/rest/v1/weekly_forecast?commodity=eq."+c+"&order=forecast_date.asc&limit=10",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setWeekly(rows);}).catch(function(e){console.error(e);});}
   useEffect(function(){
-      var script = document.createElement('script');
-      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
-      document.head.appendChild(script);
-    }
+    var script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+    document.head.appendChild(script);
   },[]);
 
   useEffect(function(){loadData(commodity);loadWeekly(commodity);var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
