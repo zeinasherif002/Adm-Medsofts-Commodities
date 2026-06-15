@@ -175,8 +175,8 @@ export default function App() {
                     {label:"Low",value:fmt(L.cbot_low),color:C.red},
                     {label:"Close",value:fmt(L.closing_cbot),color:C.blue},
                     {label:"CBOT Forecast",value:L.cbot_predicted?fmt(L.cbot_predicted):"—",color:C.purple,mape:L.mape_cbot},
-                    {label:"ARG Forecast",value:L.arg_predicted?fmtK(L.arg_predicted):"—",color:C.green,mape:L.mape_arg},
-                    {label:"BRZ Forecast",value:L.brz_predicted?fmtK(L.brz_predicted):"—",color:C.amber,mape:L.mape_brz},
+                    {label:label3,value:L.arg_predicted?fmtK(L.arg_predicted):"—",color:C.green,mape:L.mape_arg},
+                    {label:label4,value:L.brz_predicted?fmtK(L.brz_predicted):"—",color:C.amber,mape:L.mape_brz},
                   ].map(function(item,i){return(
                     <div key={i} style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:"14px 16px",borderTop:"2px solid "+item.color}}>
                       <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>{item.label}</div>
