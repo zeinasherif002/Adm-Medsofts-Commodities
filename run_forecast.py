@@ -351,6 +351,8 @@ def main():
         X_w = pd.DataFrame([[X_w_dict.get(f, 0) for f in w_features]], columns=w_features)
         w_arg = float(ridge_115.predict(X_w)[0])
         w_brz = float(ridge_125.predict(X_w)[0])
+        if w_brz < w_arg + 250:
+            w_brz = w_arg + 250
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
