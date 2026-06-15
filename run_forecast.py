@@ -384,8 +384,12 @@ def main():
         for p in w_cbot_5:
             w_rep = (p * dollar_rate / 27.216) + 600
             X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_rep, "Imports": 1200000, "Demand": 1000000}.get(f, 0) for f in w_features]], columns=w_features)
-            w_arg_5.append(float(ridge_115.predict(X_wp)[0]))
-            w_brz_5.append(float(ridge_125.predict(X_wp)[0]))
+            a5 = float(ridge_115.predict(X_wp)[0])
+            b5 = float(ridge_125.predict(X_wp)[0])
+            if b5 < a5 + 250:
+                b5 = a5 + 250
+            w_arg_5.append(a5)
+            w_brz_5.append(b5)
         upload_weekly_forecast(w_date, w_cbot_5, w_arg_5, w_brz_5, commodity="wheat")
     except Exception as e:
         log(f"  Wheat forecast failed: {e}")
