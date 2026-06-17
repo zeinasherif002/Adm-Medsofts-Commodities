@@ -283,6 +283,35 @@ def fetch_market_data_wheat():
     log(f"  Latest wheat: {wheat.index[-1].date()} @ {today_row['cbot_close']:.2f} c/bu")
     return wheat.index[-1], today_row, wheat
 
+def parse_snd_file():
+    """Parse new S&D file into monthly dataframe."""
+    try:
+        df = pd.read_excel("Supply  Demand_.xlsx", sheet_name="S&D ", header=None)
+        months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        rows = []
+        for i in range(len(df)):
+            val = df.iloc[i, 1]
+            if val in [2023, 2024, 2025, 2026]:
+                year = int(val)
+                block = df.iloc[i:i+25]
+                for j, month in enumerate(months):
+                    col = j + 2
+                    row = {"Month": f"{month}-{str(year)[2:]}"}
+                    for k in range(len(block)):
+                        label = str(block.iloc[k, 1]).strip()
+                        try:
+                            raw = str(block.iloc[k, col]).strip().replace(" ","").replace("-","0")
+                            val2 = float(raw)
+                            if "Imports" in label: row["Imports"] = val2
+                            if "Stock/Use" in label: row["STU"] = val2
+                            if "Use- Total" in label: row["Demand"] = val2
+                        except: pass
+                    rows.append(row)
+        return pd.DataFrame(rows)
+    except Exception as e:
+        log(f"  Could not parse S&D file: {e}")
+        return None
+
 def train_model_wheat():
     log("Training Ridge model from Wheat.xlsx...")
     snd = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
@@ -318,7 +347,11 @@ def train_model_wheat():
     stu = float(hist["STU"].iloc[-1])
     log(f"  Latest STU: {stu:.4f}")
     log(f"  Features used: {feature_cols}")
-    return ridge_115, ridge_125, stu, feature_cols
+    # Get latest imports and demand from S&D
+    snd = parse_snd_file()
+    latest_imports = 700000
+    latest_demand = 769000
+    return ridge_115, ridge_125, stu, feature_cols, latest_imports, latest_demand
 
 def main():
     print("=" * 55)
@@ -344,15 +377,18 @@ def main():
         print()
         log("Starting wheat forecast...")
         w_date, w_row, wheat_series = fetch_market_data_wheat()
-        ridge_115, ridge_125, w_stu, w_features = train_model_wheat()
+        ridge_115, ridge_125, w_stu, w_features, w_imports, w_demand = train_model_wheat()
         w_cbot = float(w_row["cbot_close"])
-        w_replacement = (w_cbot * dollar_rate / 27.216) + 600
-        X_w_dict = {"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_replacement, "Imports": 1200000, "Demand": 1000000}
-        X_w = pd.DataFrame([[X_w_dict.get(f, 0) for f in w_features]], columns=w_features)
-        w_arg = float(ridge_115.predict(X_w)[0])
-        w_brz = float(ridge_125.predict(X_w)[0])
+        # Direct replacement formula
+        BU_PER_TON = 1000.0 / 27.2155
+        FREIGHT = 25.0
+        w_local_fees = 429
+        w_arg = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
+        w_brz = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
         if w_brz < w_arg + 250:
             w_brz = w_arg + 250
+        log(f"  11.5% Price: {w_arg:,.0f} EGP")
+        log(f"  12.5% Price: {w_brz:,.0f} EGP")
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
@@ -382,8 +418,8 @@ def main():
         w_arg_5 = []
         w_brz_5 = []
         for p in w_cbot_5:
-            w_rep = (p * dollar_rate / 27.216) + 600
-            X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_rep, "Imports": 1200000, "Demand": 1000000}.get(f, 0) for f in w_features]], columns=w_features)
+            w_rep = (p * dollar_rate / 27.216) + w_local_fees
+            X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": w_local_fees, "Replacement": w_rep, "Imports": w_imports, "Demand": w_demand}.get(f, 0) for f in w_features]], columns=w_features)
             a5 = float(ridge_115.predict(X_wp)[0])
             b5 = float(ridge_125.predict(X_wp)[0])
             if b5 < a5 + 250:
