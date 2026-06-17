@@ -382,7 +382,7 @@ def main():
         # Direct replacement formula
         BU_PER_TON = 1000.0 / 27.2155
         FREIGHT = 25.0
-        w_local_fees = 429
+        w_local_fees = 459
         w_arg = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
         w_brz = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
         if w_brz < w_arg + 250:
