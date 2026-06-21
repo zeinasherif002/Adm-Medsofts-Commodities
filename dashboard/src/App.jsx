@@ -33,21 +33,15 @@ export default function App() {
   var [cropCondition,setCropCondition]=useState(null);
 
   function loadCropCondition(){
-    var key = "35261C14-1718-33EA-8A82-9771679304D0";
-    var url = "https://quickstats.nass.usda.gov/api/api_GET/?key="+key+"&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&format=JSON&state_name=US+TOTAL";
-    fetch(url)
+    fetch(SUPABASE_URL+"/rest/v1/usda_conditions?commodity=eq.corn&order=created_at.desc&limit=1",{headers:HEADERS})
       .then(function(r){return r.json();})
       .then(function(data){
-        if(data.data && data.data.length>0){
-          var latest = data.data.filter(function(d){return d.unit_desc==="PCT EXCELLENT";}).slice(-1)[0];
-          var good = data.data.filter(function(d){return d.unit_desc==="PCT GOOD";}).slice(-1)[0];
-          if(latest && good){
-            setCropCondition({
-              excellent: latest.Value,
-              good: good.Value,
-              week: latest.week_ending
-            });
-          }
+        if(data && data.length>0){
+          setCropCondition({
+            excellent: data[0].excellent_pct,
+            good: data[0].good_pct,
+            week: data[0].week_ending
+          });
         }
       })
       .catch(function(e){console.error("USDA error:",e);});
@@ -246,3 +240,4 @@ export default function App() {
     </div>
   );
 } 
+// force rebuild Sun Jun 21 00:09:55 UTC 2026

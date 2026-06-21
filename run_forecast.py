@@ -122,7 +122,7 @@ def fetch_market_data():
     log("Fetching CBOT corn futures from Yahoo Finance...")
     end   = datetime.today()
     start = end - timedelta(days=60)
-    corn  = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
+    corn  = yf.download("ZCN26.CBT", start=start, end=end, interval="1d", progress=False)
     if corn.empty:
         raise ValueError("Could not fetch CBOT data.")
     if isinstance(corn.columns, pd.MultiIndex):
@@ -208,6 +208,16 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
     close_series = corn_series["cbot_close"]
     cbot_next = xgb_forecast_next(close_series)
     log(f"  CBOT next-day forecast: {cbot_next:.2f} c/bu")
+    # Calculate OHLC forecast
+    high_series = corn_series["cbot_high"]
+    low_series = corn_series["cbot_low"]
+    open_series = corn_series["cbot_open"]
+    avg_range = float((high_series - low_series).tail(20).mean())
+    avg_open_diff = float((open_series - corn_series["cbot_close"].shift(1)).dropna().tail(20).mean())
+    cbot_next_open = round(cbot + avg_open_diff, 2)
+    cbot_next_high = round(cbot_next + avg_range * 0.6, 2)
+    cbot_next_low = round(cbot_next - avg_range * 0.4, 2)
+    log(f"  OHLC forecast: O:{cbot_next_open} H:{cbot_next_high} L:{cbot_next_low} C:{cbot_next:.2f}")
 
     mape_cbot = None
     mape_arg  = None
@@ -244,6 +254,9 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
         "brz_price":      round(brz, 2),
         "fut_ret": round((cbot - yesterday_close) / yesterday_close, 6) if yesterday_close else None,
         "cbot_predicted": round(cbot_next, 4),
+        "predicted_open": round(cbot_next_open, 4),
+        "predicted_high": round(cbot_next_high, 4),
+        "predicted_low": round(cbot_next_low, 4),
         "arg_predicted":  round(arg, 2),
         "brz_predicted":  round(brz, 2),
     }
@@ -353,6 +366,52 @@ def train_model_wheat():
     latest_demand = 769000
     return ridge_115, ridge_125, stu, feature_cols, latest_imports, latest_demand
 
+def fetch_usda_conditions():
+    """Fetch latest USDA crop conditions and save to Supabase."""
+    try:
+        log("Fetching USDA crop conditions...")
+        key = "35261C14-1718-33EA-8A82-9771679304D0"
+        url = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&format=JSON&state_name=US+TOTAL"
+        r = requests.get(url, timeout=15)
+        data = r.json().get("data", [])
+        if not data:
+            log("  No USDA data found")
+            return
+        # Get latest week
+        latest_week = max(d["week_ending"] for d in data)
+        week_data = [d for d in data if d["week_ending"] == latest_week]
+        conditions = {}
+        for d in week_data:
+            unit = d.get("unit_desc", "")
+            val = d.get("Value", "0").replace(",","").strip()
+            try:
+                if "EXCELLENT" in unit: conditions["excellent_pct"] = float(val)
+                elif "GOOD" in unit: conditions["good_pct"] = float(val)
+                elif "FAIR" in unit: conditions["fair_pct"] = float(val)
+                elif "POOR" in unit and "VERY" not in unit: conditions["poor_pct"] = float(val)
+            except: pass
+        record = {
+            "week_ending": latest_week,
+            "commodity": "corn",
+            **conditions
+        }
+        # Delete old and insert new
+        requests.delete(
+            f"{SUPABASE_URL}/rest/v1/usda_conditions?commodity=eq.corn",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        )
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/usda_conditions",
+            headers=HEADERS,
+            data=json.dumps([record])
+        )
+        if resp.status_code in (200, 201):
+            log(f"  USDA conditions saved! Excellent: {conditions.get('excellent_pct')}% Good: {conditions.get('good_pct')}%")
+        else:
+            log(f"  USDA upload error: {resp.status_code} {resp.text}")
+    except Exception as e:
+        log(f"  USDA fetch failed: {e}")
+
 def main():
     print("=" * 55)
     print("  AdmMedSofts - Daily Forecast Pipeline")
@@ -430,6 +489,7 @@ def main():
     except Exception as e:
         log(f"  Wheat forecast failed: {e}")
 
+    fetch_usda_conditions()
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
