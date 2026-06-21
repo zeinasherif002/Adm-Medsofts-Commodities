@@ -417,6 +417,98 @@ def fetch_usda_conditions():
     except Exception as e:
         log(f"  USDA fetch failed: {e}")
 
+def fetch_wasde_preanalysis():
+    """Generate pre-WASDE analysis based on USDA crop conditions and planted acres."""
+    try:
+        log("Generating pre-WASDE analysis...")
+        from datetime import date
+        key = "35261C14-1718-33EA-8A82-9771679304D0"
+
+        # Get planted acres
+        url_acres = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=AREA+PLANTED&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
+        r_acres = requests.get(url_acres, timeout=15)
+        acres_data = r_acres.json().get("data", [])
+        planted_acres = float(acres_data[0]["Value"].replace(",","")) if acres_data else 95338000
+
+        # Get latest crop conditions
+        url_cond = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&agg_level_desc=NATIONAL&format=JSON&state_name=US+TOTAL"
+        r_cond = requests.get(url_cond, timeout=15)
+        cond_data = r_cond.json().get("data", [])
+        ge_pct = 0
+        for d in cond_data:
+            if "EXCELLENT" in d.get("unit_desc","") or "GOOD" in d.get("unit_desc",""):
+                try: ge_pct += float(d["Value"])
+                except: pass
+        # Get latest week only (divide by number of weeks)
+        weeks = len(set(d["week_ending"] for d in cond_data if "EXCELLENT" in d.get("unit_desc","")))
+        ge_pct = ge_pct / max(weeks, 1) if weeks > 1 else ge_pct
+
+        # Estimate yield using trend + condition adjustment
+        # Base trend yield 2026: ~182 bu/acre
+        # G+E 68% = average conditions = trend yield
+        # Each 1% above/below average G+E ~ 0.5 bu/acre adjustment
+        trend_yield = 182.0
+        avg_ge = 68.0  # historical average
+        yield_adjustment = (ge_pct - avg_ge) * 0.5
+        estimated_yield = round(trend_yield + yield_adjustment, 1)
+
+        # Scenarios
+        bullish_yield = round(estimated_yield - 3, 1)  # weather stress
+        bearish_yield = round(estimated_yield + 3, 1)  # perfect weather
+
+        # Production estimates (harvested = planted x 0.916)
+        harvest_ratio = 0.916
+        estimated_prod = round(planted_acres * harvest_ratio * estimated_yield / 1e9, 2)
+        prev_year_prod = 15.14  # 2025 record billion bushels
+
+        # Price impact assessment
+        if estimated_prod < prev_year_prod - 0.3:
+            price_impact = "BULLISH - Production below last year, expect price support"
+        elif estimated_prod > prev_year_prod + 0.3:
+            price_impact = "BEARISH - Production above last year, expect price pressure"
+        else:
+            price_impact = "NEUTRAL - Production near last year, limited directional bias"
+
+        log(f"  Planted acres: {planted_acres/1e6:.1f}M")
+        log(f"  G+E condition: {ge_pct:.1f}%")
+        log(f"  Estimated yield: {estimated_yield} bu/acre")
+        log(f"  Estimated production: {estimated_prod}B bu")
+        log(f"  Price impact: {price_impact}")
+
+        # Next WASDE date
+        next_wasde = "2026-07-11"
+
+        record = {
+            "report_date": next_wasde,
+            "commodity": "corn",
+            "planted_acres": planted_acres,
+            "ge_condition": round(ge_pct, 1),
+            "estimated_yield": estimated_yield,
+            "estimated_production": estimated_prod,
+            "prev_year_production": prev_year_prod,
+            "bullish_scenario_yield": bullish_yield,
+            "bearish_scenario_yield": bearish_yield,
+            "price_impact": price_impact
+        }
+
+        # Delete old and insert new
+        requests.delete(
+            f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.corn",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        )
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/wasde_analysis",
+            headers=HEADERS,
+            data=json.dumps([record])
+        )
+        if resp.status_code in (200, 201):
+            log("  WASDE pre-analysis saved!")
+        else:
+            log(f"  WASDE error: {resp.status_code} {resp.text}")
+
+    except Exception as e:
+        log(f"  WASDE analysis failed: {e}")
+
 def main():
     print("=" * 55)
     print("  AdmMedSofts - Daily Forecast Pipeline")
@@ -495,6 +587,7 @@ def main():
         log(f"  Wheat forecast failed: {e}")
 
     fetch_usda_conditions()
+    fetch_wasde_preanalysis()
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
