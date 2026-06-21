@@ -1,5 +1,5 @@
 """
-run_forecast.py - AdmMedSofts Daily Corn Forecast Pipeline
+sed -n '228,245p' /workspaces/Adm-Medsofts-Commodities/run_forecast.pyrun_forecast.py - AdmMedSofts Daily Corn Forecast Pipeline
 - Trains on monthly SnD data using RidgeCV (ARG/BRZ prices)
 - Runs XGBoost for CBOT next-day forecast
 - Fetches today's CBOT + dollar rate from Yahoo Finance
@@ -269,6 +269,11 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
 
 def upload(record):
     log("Uploading to Supabase...")
+    # Delete today's record first to avoid duplicates
+    requests.delete(
+        f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{record['date']}&commodity=eq.{record['commodity']}",
+        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    )
     resp = requests.post(
         f"{SUPABASE_URL}/rest/v1/commodity_prices",
         headers=HEADERS,

@@ -190,7 +190,7 @@ export default function App() {
                     {label:"High",value:fmt(L.cbot_high),color:C.green},
                     {label:"Low",value:fmt(L.cbot_low),color:C.red},
                     {label:"Close",value:fmt(L.closing_cbot),color:C.blue},
-                    {label:"CBOT Forecast",value:L.cbot_predicted?fmt(L.cbot_predicted):"—",color:C.purple,mape:L.mape_cbot},
+                    {label:"Pred. Open",value:L.predicted_open?fmt(L.predicted_open):"—",color:C.sub},{label:"Pred. High",value:L.predicted_high?fmt(L.predicted_high):"—",color:C.green},{label:"Pred. Low",value:L.predicted_low?fmt(L.predicted_low):"—",color:C.red},{label:"Pred. Close",value:L.cbot_predicted?fmt(L.cbot_predicted):"—",color:C.blue,mape:L.mape_cbot},
                     {label:label3,value:L.arg_predicted?fmtK(L.arg_predicted):"—",color:C.green,mape:L.mape_arg},
                     {label:label4,value:L.brz_predicted?fmtK(L.brz_predicted):"—",color:C.amber,mape:L.mape_brz},
                   ].map(function(item,i){return(
