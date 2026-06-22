@@ -145,64 +145,181 @@ export default function App() {
 
   function generateWasdeReport(){
     var jsPDF = window.jspdf && window.jspdf.jsPDF;
-    if(!jsPDF){ alert("PDF library loading, try again in 2 seconds."); return; }
-    var doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    if(!jsPDF){ alert("PDF library still loading, please try again in a moment."); return; }
+    var doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
     var W = doc.internal.pageSize.getWidth();
+    var H = doc.internal.pageSize.getHeight();
     var today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
     var w = isWheat ? wasdeWheat : wasde;
-    doc.setFillColor(13,17,23); doc.rect(0,0,W,40,"F");
-    doc.setTextColor(241,245,249); doc.setFontSize(18); doc.setFont("helvetica","bold");
-    doc.text("ADM MedSofts — Pre-WASDE Report", W/2, 16, {align:"center"});
-    doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(123,141,176);
-    doc.text("Commodity Intelligence Dashboard  |  Generated: " + today, W/2, 24, {align:"center"});
-    doc.setFontSize(9);
-    doc.text("Next WASDE Report: " + (w ? w.report_date : "2026-07-11"), W/2, 31, {align:"center"});
-    doc.setFillColor(27,58,140); doc.roundedRect(W/2-20,34,40,8,2,2,"F");
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
-    doc.text((isWheat?"WHEAT":"CORN").toUpperCase(), W/2, 39.5, {align:"center"});
-    var y = 50;
-    if(w && w.price_impact){
-      var isBull=w.price_impact.includes("BULL"),isBear=w.price_impact.includes("BEAR");
-      doc.setFillColor(isBull?92:isBear?248:251,isBull?184:isBear?113:191,isBull?92:isBear?113:36);
-      doc.roundedRect(14,y,50,9,2,2,"F"); doc.setTextColor(13,17,23); doc.setFontSize(10); doc.setFont("helvetica","bold");
-      doc.text(w.price_impact.split(" - ")[0],39,y+6.5,{align:"center"}); y+=15;
+    var comm = isWheat ? "Wheat" : "Corn";
+    var ticker = isWheat ? "ZW=F" : "ZCN26.CBT";
+    var cbot = L ? L.closing_cbot : 0;
+    var predicted = L ? L.cbot_predicted : 0;
+    var support = sr.support;
+    var resistance = sr.resistance;
+    var rsiVal = rsi ? rsi.toFixed(1) : "N/A";
+    var macdDir = macd && macd.histogram ? (macd.histogram > 0 ? "positive (bullish)" : "negative (bearish)") : "N/A";
+    var trendDesc = trend === "bullish" ? "uptrend" : trend === "bearish" ? "downtrend" : "sideways consolidation";
+    var ge = w ? w.ge_condition : 0;
+    var estYield = w ? w.estimated_yield : 0;
+    var estProd = w ? w.estimated_production : 0;
+    var prevProd = w ? w.prev_year_production : 0;
+    var bullYield = w ? w.bullish_scenario_yield : 0;
+    var bearYield = w ? w.bearish_scenario_yield : 0;
+    var isBull = w && w.price_impact && w.price_impact.includes("BULL");
+    var isBear = w && w.price_impact && w.price_impact.includes("BEAR");
+    var bias = isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL";
+    var nextWasde = w ? w.report_date : "2026-07-11";
+    var acres = w ? (w.planted_acres/1e6).toFixed(1) : "N/A";
+    var neutral7Low=(cbot*0.985).toFixed(2),neutral7High=(cbot*1.015).toFixed(2);
+    var neutral30Low=(cbot*0.970).toFixed(2),neutral30High=(cbot*1.010).toFixed(2);
+    var bear7Low=(cbot*0.965).toFixed(2),bear7High=(cbot*0.985).toFixed(2);
+    var bear30Low=(cbot*0.945).toFixed(2),bear30High=(cbot*0.975).toFixed(2);
+    var bull7Low=(cbot*1.015).toFixed(2),bull7High=(cbot*1.040).toFixed(2);
+    var bull30Low=(cbot*1.020).toFixed(2),bull30High=(cbot*1.060).toFixed(2);
+    var pNeutral=isBull?30:isBear?30:40, pBear=isBull?20:isBear?45:35, pBull=isBull?50:isBear?25:25;
+    var lm=14, rm=W-14, y=0;
+
+    function addPage(){doc.addPage();y=20;doc.setDrawColor(200,200,200);doc.setLineWidth(0.3);doc.line(lm,15,rm,15);doc.setTextColor(150,150,150);doc.setFontSize(7.5);doc.setFont("helvetica","italic");doc.text("ADM MedSofts — "+comm+" Pre-WASDE Report | "+today,lm,12);doc.text("CONFIDENTIAL",rm,12,{align:"right"});}
+    function checkY(n){if(y+n>H-20){addPage();}}
+    function sectionTitle(txt){checkY(12);doc.setDrawColor(30,30,30);doc.setLineWidth(0.5);doc.line(lm,y,rm,y);y+=5;doc.setTextColor(15,15,15);doc.setFontSize(10.5);doc.setFont("helvetica","bold");doc.text(txt.toUpperCase(),lm,y);y+=6;doc.setDrawColor(200,200,200);doc.setLineWidth(0.2);doc.line(lm,y,rm,y);y+=5;}
+    function bodyText(txt,indent){if(!indent)indent=0;var lines=doc.splitTextToSize(txt,rm-lm-indent);doc.setFontSize(9.5);doc.setFont("helvetica","normal");doc.setTextColor(40,40,40);lines.forEach(function(line){checkY(6);doc.text(line,lm+indent,y);y+=5.5;});y+=1;}
+    function boldLabel(label,value){checkY(7);doc.setFontSize(9.5);doc.setFont("helvetica","bold");doc.setTextColor(15,15,15);doc.text(label,lm,y);var lw=doc.getTextWidth(label);doc.setFont("helvetica","normal");doc.setTextColor(40,40,40);doc.text(value,lm+lw+1,y);y+=6;}
+    function bullet(txt){checkY(6);doc.setFontSize(9);doc.setFont("helvetica","normal");doc.setTextColor(40,40,40);doc.text("\u2022",lm+4,y);var lines=doc.splitTextToSize(txt,rm-lm-10);lines.forEach(function(line,i){doc.text(line,lm+9,y);if(i<lines.length-1){y+=5;checkY(6);}});y+=5.5;}
+    function gap(n){y+=n||4;}
+
+    // PAGE 1 HEADER
+    doc.setFillColor(15,15,15);doc.rect(0,0,W,36,"F");
+    doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont("helvetica","bold");
+    doc.text("ADM MedSofts Commodity Intelligence",W/2,12,{align:"center"});
+    doc.setFontSize(13);doc.setFont("helvetica","normal");
+    doc.text(comm.toUpperCase()+" — PRE-WASDE MARKET REPORT",W/2,21,{align:"center"});
+    doc.setFontSize(8.5);doc.setTextColor(180,180,180);
+    doc.text("Next WASDE: "+nextWasde+"   |   Generated: "+today+"   |   "+ticker,W/2,29,{align:"center"});
+    var bc=isBull?[40,120,40]:isBear?[160,30,30]:[140,100,0];
+    doc.setFillColor(bc[0],bc[1],bc[2]);doc.roundedRect(W/2-22,31,44,9,2,2,"F");
+    doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont("helvetica","bold");
+    doc.text("OVERALL BIAS: "+bias,W/2,37,{align:"center"});
+    y=46;
+
+    sectionTitle("Executive Summary");
+    var prodVsPrev=estProd>prevProd?"above":estProd<prevProd?"below":"in line with";
+    var prodDiff=Math.abs(estProd-prevProd).toFixed(2);
+    bodyText("This report provides a pre-WASDE market analysis for "+comm+" futures ahead of the "+nextWasde+" USDA report release. Based on current USDA crop condition data, planted acreage figures, and our yield estimation model, the overall market bias is assessed as "+bias+".");
+    gap();
+    bodyText("Current CBOT "+comm+" futures ("+ticker+") are trading at "+cbot.toFixed(2)+" c/bu. Estimated production for 2026 stands at "+estProd+"B bushels, which is "+prodVsPrev+" last year's "+prevProd+"B bushels by "+prodDiff+"B bu. This "+(isBear?"supply-side pressure":"production outlook")+" represents the primary driver of our bias assessment.");
+
+    gap(3);
+    sectionTitle("USDA Crop Condition & Supply Estimates");
+    boldLabel("Planted Acres:  ",acres+"M acres");
+    boldLabel("Good + Excellent (G+E):  ",ge+"% of crop rated G/E");
+    boldLabel("Estimated Yield:  ",estYield+" bu/acre");
+    boldLabel("Estimated Production:  ",estProd+"B bushels");
+    boldLabel("Previous Year Production:  ",prevProd+"B bushels");
+    gap();
+    var geDesc=ge>65?"above-average crop conditions, suggesting strong yield potential and bearish price pressure":ge>50?"near-average crop conditions with limited directional bias":"below-average crop conditions indicating potential yield stress and price support";
+    bodyText("The current G+E rating of "+ge+"% reflects "+geDesc+". Our yield model estimates "+estYield+" bu/acre for the 2026 crop, derived from a base trend yield adjusted by +/- 0.5 bu/acre per percentage point deviation from historical average G+E.");
+    if(cropCondition&&!isWheat){gap();boldLabel("USDA Weekly Conditions (week ending "+cropCondition.week+"):  ","Excellent: "+cropCondition.excellent+"%  |  Good: "+cropCondition.good+"%  |  G+E: "+(cropCondition.excellent+cropCondition.good)+"%");}
+
+    gap(3);
+    sectionTitle("Pre-WASDE Expectations");
+    boldLabel("Key Focus:  ",isWheat?"Global wheat supply, Black Sea exports, U.S. winter wheat harvest":"U.S. ending stocks, South American production, feed demand");
+    boldLabel("Yield Estimate:  ",estYield+" bu/acre");
+    boldLabel("Production Estimate:  ",estProd+"B bu  ("+(estProd>prevProd?"above":"below")+" last year's "+prevProd+"B bu)");
+    gap();
+    bodyText("The market will closely watch whether USDA confirms, raises, or cuts its "+comm.toLowerCase()+" production estimates. "+(isBear?"Given the bearish supply backdrop, any upward revision to production or stocks would extend selling pressure. A downward revision would be required to shift sentiment.":isBull?"Given the tighter supply outlook, any downward revision to production or confirmation of crop stress would support prices.":"The market is balanced near current levels. Directional bias will depend on whether USDA surprises to the upside or downside relative to trade expectations."));
+
+    // PAGE 2
+    addPage();
+    sectionTitle("Scenarios for WASDE Reaction");
+    doc.setFontSize(10);doc.setFont("helvetica","bold");doc.setTextColor(100,80,0);
+    doc.text("SCENARIO 1: NEUTRAL ("+pNeutral+"% probability)",lm,y);y+=6;
+    doc.setDrawColor(200,170,0);doc.setLineWidth(0.3);doc.line(lm,y,rm,y);y+=4;
+    bodyText("If "+comm.toLowerCase()+" production/stocks come in broadly in line with current expectations:");
+    bullet("Initial reaction: -2 to +2 c/bu (minimal move)");
+    bullet("Short-term direction: Sideways to slightly "+(isBear?"lower":"higher"));
+    bullet("7-day price target: "+neutral7Low+" – "+neutral7High+" c/bu");
+    bullet("30-day price target: "+neutral30Low+" – "+neutral30High+" c/bu");
+    bullet("Key: Focus shifts to "+(isWheat?"global export pace and Black Sea developments":"export sales data and South American weather"));
+    gap(3);
+
+    doc.setFontSize(10);doc.setFont("helvetica","bold");doc.setTextColor(160,30,30);
+    doc.text("SCENARIO 2: BEARISH SURPRISE ("+pBear+"% probability)",lm,y);y+=6;
+    doc.setDrawColor(200,80,80);doc.setLineWidth(0.3);doc.line(lm,y,rm,y);y+=4;
+    bodyText("If USDA raises production/stocks above current estimates (yield at "+bearYield+" bu/acre or higher):");
+    bullet("Initial reaction: -5 to -10 c/bu");
+    bullet("Short-term direction: Continued downward pressure");
+    bullet("7-day price target: "+bear7Low+" – "+bear7High+" c/bu");
+    bullet("30-day price target: "+bear30Low+" – "+bear30High+" c/bu");
+    bullet("Risk: Test of recent support at "+support.toFixed(2)+" c/bu");
+    bullet("Catalyst: "+(isWheat?"Strong global harvest + weak import demand":"Large South American crop + weak feed/residual demand"));
+    gap(3);
+
+    doc.setFontSize(10);doc.setFont("helvetica","bold");doc.setTextColor(30,120,30);
+    doc.text("SCENARIO 3: BULLISH SURPRISE ("+pBull+"% probability)",lm,y);y+=6;
+    doc.setDrawColor(60,160,60);doc.setLineWidth(0.3);doc.line(lm,y,rm,y);y+=4;
+    bodyText("If USDA cuts production/stocks below current estimates (yield at "+bullYield+" bu/acre or lower):");
+    bullet("Initial reaction: +5 to +12 c/bu");
+    bullet("Short-term direction: Rally extension");
+    bullet("7-day price target: "+bull7Low+" – "+bull7High+" c/bu");
+    bullet("30-day price target: "+bull30Low+" – "+bull30High+" c/bu");
+    bullet("Catalyst: "+(isWheat?"Frost/drought damage to winter wheat crop":"Weather stress in key growing regions + export surge"));
+    bullet("Key resistance: "+resistance.toFixed(2)+" c/bu");
+    gap(3);
+
+    sectionTitle("Technical Analysis");
+    boldLabel("Current CBOT Price:  ",cbot.toFixed(2)+" c/bu  ("+ticker+")");
+    boldLabel("Next-Day Model Forecast:  ",predicted?predicted.toFixed(2)+" c/bu":"N/A");
+    boldLabel("Trend:  ",trend.charAt(0).toUpperCase()+trend.slice(1)+" — "+trendDesc);
+    boldLabel("RSI (14):  ",rsiVal+" — "+rsiSig+(rsi?(rsi<30?" (oversold)":rsi>70?" (overbought)":" (neutral)"):""));
+    boldLabel("MACD:  ",macdDir);
+    boldLabel("Z-Score:  ",zs.toFixed(2)+(Math.abs(zs)>2?" — STATISTICALLY EXTREME":" — within normal range"));
+    boldLabel("Support:  ",support.toFixed(2)+" c/bu");
+    boldLabel("Resistance:  ",resistance.toFixed(2)+" c/bu");
+    if(boll&&boll.upper){boldLabel("Bollinger Bands:  ","Upper: "+boll.upper.toFixed(2)+"  Lower: "+boll.lower.toFixed(2)+(cbot>boll.upper?"  — Above upper band":cbot<boll.lower?"  — Below lower band":"  — Inside bands"));}
+    gap();
+    bodyText("From a technical perspective, the "+comm.toLowerCase()+" market is currently "+(sig==="BUY"?"showing bullish signals with "+buys+" out of 3 indicators pointing higher. Watch for a sustained break above resistance at "+resistance.toFixed(2)+" c/bu.":sig==="SELL"?"showing bearish signals with "+sells+" out of 3 indicators pointing lower. Key support at "+support.toFixed(2)+" c/bu should be monitored closely.":"in a mixed technical state. A breakout above "+resistance.toFixed(2)+" or break below "+support.toFixed(2)+" c/bu will determine the next move."));
+
+    // PAGE 3
+    addPage();
+    sectionTitle("Current Market Prices (EGP)");
+    if(L){
+      var p1l=isWheat?"11.5% Protein Wheat":"ARG Origin Corn", p2l=isWheat?"12.5% Protein Wheat":"BRZ Origin Corn";
+      boldLabel("Dollar Rate:  ",L.dollar_rate.toFixed(2)+" EGP/USD");
+      boldLabel(p1l+":  ",Math.round(L.arg_price).toLocaleString()+" EGP/MT");
+      boldLabel(p2l+":  ",Math.round(L.brz_price).toLocaleString()+" EGP/MT");
+      if(L.arg_predicted)boldLabel(p1l+" Forecast:  ",Math.round(L.arg_predicted).toLocaleString()+" EGP/MT");
+      if(L.brz_predicted)boldLabel(p2l+" Forecast:  ",Math.round(L.brz_predicted).toLocaleString()+" EGP/MT");
+      gap();
+      bodyText("Local EGP prices are derived from CBOT futures converted at "+L.dollar_rate.toFixed(2)+" EGP/USD, "+(isWheat?"adjusted by the formula: ((CBOT/100) × 36.74 + 25) × Dollar Rate + 459.":"adjusted via Ridge Regression model trained on historical Supply & Demand data."));
     }
-    doc.setFillColor(17,24,39); doc.roundedRect(14,y,W-28,38,3,3,"F");
-    doc.setDrawColor(30,45,69); doc.roundedRect(14,y,W-28,38,3,3,"S");
-    doc.setTextColor(123,141,176); doc.setFontSize(8); doc.setFont("helvetica","bold");
-    doc.text("KEY METRICS",20,y+7); y+=10;
-    var metrics=w?[["Planted Acres",w.planted_acres?(w.planted_acres/1e6).toFixed(1)+"M acres":"—"],["G+E Condition",w.ge_condition?w.ge_condition+"%":"—"],["Est. Yield",w.estimated_yield?w.estimated_yield+" bu/ac":"—"],["Est. Production",w.estimated_production?w.estimated_production+"B bu":"—"],["Prev Year Prod.",w.prev_year_production?w.prev_year_production+"B bu":"—"]]:[];
-    var col=(W-28)/2;
-    metrics.forEach(function(m,i){var cx=20+(i%2)*col,cy=y+Math.floor(i/2)*10;doc.setTextColor(123,141,176);doc.setFontSize(7.5);doc.setFont("helvetica","normal");doc.text(m[0].toUpperCase(),cx,cy);doc.setTextColor(241,245,249);doc.setFontSize(10);doc.setFont("helvetica","bold");doc.text(m[1],cx,cy+5.5);});
-    y+=32;
-    if(w&&w.price_impact){doc.setTextColor(241,245,249);doc.setFontSize(9);doc.setFont("helvetica","italic");doc.text(w.price_impact.split(" - ")[1]||"",14,y+6);y+=12;}
-    doc.setFillColor(18,38,18); doc.roundedRect(14,y,(W-32)/2,28,3,3,"F"); doc.setDrawColor(92,184,92); doc.roundedRect(14,y,(W-32)/2,28,3,3,"S");
-    doc.setTextColor(92,184,92); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("BULLISH SCENARIO",20,y+8);
-    doc.setTextColor(241,245,249); doc.setFontSize(8.5); doc.setFont("helvetica","normal");
-    doc.text(w?"Yield drops to "+w.bullish_scenario_yield+" bu/ac":"—",20,y+16);
-    doc.text("(weather stress) → prices rally",20,y+23);
-    var rx=14+(W-32)/2+4;
-    doc.setFillColor(38,18,18); doc.roundedRect(rx,y,(W-32)/2,28,3,3,"F"); doc.setDrawColor(248,113,113); doc.roundedRect(rx,y,(W-32)/2,28,3,3,"S");
-    doc.setTextColor(248,113,113); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("BEARISH SCENARIO",rx+6,y+8);
-    doc.setTextColor(241,245,249); doc.setFontSize(8.5); doc.setFont("helvetica","normal");
-    doc.text(w?"Yield rises to "+w.bearish_scenario_yield+" bu/ac":"—",rx+6,y+16);
-    doc.text(isWheat?"(ideal harvest) → prices fall":"(perfect weather) → prices fall",rx+6,y+23);
-    y+=36;
-    doc.setFillColor(17,24,39); doc.roundedRect(14,y,W-28,45,3,3,"F"); doc.setDrawColor(30,45,69); doc.roundedRect(14,y,W-28,45,3,3,"S");
-    doc.setTextColor(123,141,176); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("CURRENT MARKET DATA",20,y+8); y+=12;
-    if(L){var mktData=[["CBOT Close",L.closing_cbot?L.closing_cbot.toFixed(2)+" c/bu":"—"],["Dollar Rate",L.dollar_rate?L.dollar_rate.toFixed(2)+" EGP/USD":"—"],[isWheat?"11.5% Price":"ARG Price",L.arg_price?Math.round(L.arg_price).toLocaleString()+" EGP":"—"],[isWheat?"12.5% Price":"BRZ Price",L.brz_price?Math.round(L.brz_price).toLocaleString()+" EGP":"—"],["Next-Day Forecast",L.cbot_predicted?L.cbot_predicted.toFixed(2)+" c/bu":"—"],["MAPE",L.mape_cbot?L.mape_cbot.toFixed(2)+"%":"—"]];var col2=(W-28)/2;mktData.forEach(function(m,i){var cx=20+(i%2)*col2,cy=y+Math.floor(i/2)*11;doc.setTextColor(123,141,176);doc.setFontSize(7.5);doc.setFont("helvetica","normal");doc.text(m[0].toUpperCase(),cx,cy);doc.setTextColor(241,245,249);doc.setFontSize(10);doc.setFont("helvetica","bold");doc.text(m[1],cx,cy+5.5);});}
-    y+=38;
-    doc.setFillColor(17,24,39); doc.roundedRect(14,y,W-28,38,3,3,"F"); doc.setDrawColor(30,45,69); doc.roundedRect(14,y,W-28,38,3,3,"S");
-    doc.setTextColor(123,141,176); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("TECHNICAL SIGNALS",20,y+8); y+=12;
-    var techData=[["Overall Signal",sig],["RSI (14)",rsi?rsi.toFixed(1)+" — "+rsiSig:"—"],["MACD",macd&&macd.histogram?(macd.histogram>0?"Bullish":"Bearish"):"—"],["Trend",trend.toUpperCase()],["Z-Score",zs.toFixed(2)+(Math.abs(zs)>2?" EXTREME":"")],["Support / Resistance",sr.support.toFixed(2)+" / "+sr.resistance.toFixed(2)]];
-    var col3=(W-28)/2;techData.forEach(function(m,i){var cx=20+(i%2)*col3,cy=y+Math.floor(i/2)*11;doc.setTextColor(123,141,176);doc.setFontSize(7.5);doc.setFont("helvetica","normal");doc.text(m[0].toUpperCase(),cx,cy);doc.setTextColor(241,245,249);doc.setFontSize(10);doc.setFont("helvetica","bold");doc.text(String(m[1]),cx,cy+5.5);});
-    y+=32;
-    if(cropCondition&&!isWheat){doc.setFillColor(9,38,9);doc.roundedRect(14,y,W-28,18,3,3,"F");doc.setDrawColor(92,184,92);doc.roundedRect(14,y,W-28,18,3,3,"S");doc.setTextColor(92,184,92);doc.setFontSize(8);doc.setFont("helvetica","bold");doc.text("USDA CROP CONDITIONS — Week ending "+cropCondition.week,20,y+7);doc.setTextColor(241,245,249);doc.setFontSize(9);doc.setFont("helvetica","normal");doc.text("Excellent: "+cropCondition.excellent+"%   |   Good: "+cropCondition.good+"%",20,y+14);y+=22;}
-    doc.setFillColor(13,17,23); doc.rect(0,280,W,17,"F");
-    doc.setTextColor(123,141,176); doc.setFontSize(7.5); doc.setFont("helvetica","normal");
-    doc.text("ADM MedSofts Commodity Intelligence — Confidential",W/2,287,{align:"center"});
-    doc.text("Generated from forecast models. Not sole trading advice.",W/2,292,{align:"center"});
-    doc.save("AdmMedSofts_PreWASDE_"+(isWheat?"Wheat":"Corn")+"_"+today.replace(/ /g,"_")+".pdf");
+
+    gap(3);
+    sectionTitle("Longer-Term Outlook");
+    var ltBias=isBear?"bearish":isBull?"bullish":"neutral";
+    bodyText("The fundamental medium-term bias for "+comm+" is "+ltBias+" heading into the July WASDE cycle. "+(isBear?"Above-average production estimates combined with "+(isWheat?"strong global supply from the Black Sea region":"large South American crops and strong Brazilian competition")+" are capping upside potential. Demand growth has not kept pace with the supply increase.":isBull?"Below-trend crop conditions and potential yield stress provide a supportive floor for prices. Any weather deterioration in key growing regions could accelerate the rally.":"The market is balanced between adequate supply and steady demand. Price direction will depend on whether crop conditions improve or deteriorate through the critical growing season."));
+    gap();
+    boldLabel("Expected trading range (next 30-60 days):  ",(cbot*0.93).toFixed(2)+" – "+(cbot*1.08).toFixed(2)+" c/bu");
+    boldLabel("Key support:  ",support.toFixed(2)+" c/bu");
+    boldLabel("Key resistance:  ",resistance.toFixed(2)+" c/bu");
+    gap();
+    bodyText("Key catalysts to watch: "+(isWheat?"Global export tenders, Black Sea shipping, EU/Russia crop conditions, U.S. winter wheat harvest progress, and import demand shifts from Egypt and major buyers.":"Weekly USDA export inspections, South American harvest pace, U.S. growing season weather, ethanol demand data, and China purchasing activity."));
+
+    gap(3);
+    sectionTitle("Pre-Report Positioning Notes");
+    bullet("Volatility is expected to spike around the "+nextWasde+" WASDE release (12:00 PM ET).");
+    bullet("Options premiums may be elevated ahead of the report — consider implied move when sizing.");
+    bullet("Wait for post-report clarity before establishing directional positions if risk tolerance is low.");
+    bullet("If positioned, use defined stops — report-day moves of 10-20+ c/bu are not uncommon.");
+    bullet("Local EGP buyers should monitor the dollar rate alongside CBOT for full price impact.");
+
+    var footY=H-12;
+    doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(lm,footY-4,rm,footY-4);
+    doc.setTextColor(130,130,130);doc.setFontSize(7.5);doc.setFont("helvetica","italic");
+    doc.text("ADM MedSofts Commodity Intelligence — CONFIDENTIAL",W/2,footY,{align:"center"});
+    doc.text("Generated from statistical forecast models and USDA public data. Not sole trading advice.",W/2,footY+4,{align:"center"});
+
+    doc.save("AdmMedSofts_PreWASDE_"+comm+"_"+today.replace(/ /g,"_")+".pdf");
   }
 
   function runAI(){setAiLoad(true);setAi("");setTab("analysis");setTimeout(function(){setAi(report());setAiLoad(false);},800);}
