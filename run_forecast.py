@@ -509,6 +509,99 @@ def fetch_wasde_preanalysis():
     except Exception as e:
         log(f"  WASDE analysis failed: {e}")
 
+
+def fetch_wasde_preanalysis_wheat():
+    """Generate pre-WASDE analysis for wheat based on USDA crop conditions and planted acres."""
+    try:
+        log("Generating pre-WASDE wheat analysis...")
+        key = "35261C14-1718-33EA-8A82-9771679304D0"
+
+        url_acres = (
+            f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}"
+            f"&commodity_desc=WHEAT&statisticcat_desc=AREA+PLANTED"
+            f"&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
+        )
+        r_acres = requests.get(url_acres, timeout=15)
+        acres_data = r_acres.json().get("data", [])
+        all_wheat = [d for d in acres_data if d.get("class_desc","") in ("ALL CLASSES","")]
+        if all_wheat:
+            planted_acres = float(all_wheat[0]["Value"].replace(",",""))
+        elif acres_data:
+            planted_acres = float(acres_data[0]["Value"].replace(",",""))
+        else:
+            planted_acres = 47000000
+
+        url_cond = (
+            f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}"
+            f"&commodity_desc=WHEAT&statisticcat_desc=CONDITION"
+            f"&year=2026&agg_level_desc=NATIONAL&format=JSON&state_name=US+TOTAL"
+        )
+        r_cond = requests.get(url_cond, timeout=15)
+        cond_data = r_cond.json().get("data", [])
+
+        ge_pct = 0
+        for d in cond_data:
+            if "EXCELLENT" in d.get("unit_desc","").upper() or "GOOD" in d.get("unit_desc","").upper():
+                try: ge_pct += float(d["Value"])
+                except: pass
+        weeks = len(set(d["week_ending"] for d in cond_data if "EXCELLENT" in d.get("unit_desc","").upper()))
+        ge_pct = ge_pct / max(weeks,1) if weeks > 1 else ge_pct
+        if ge_pct == 0: ge_pct = 48.0
+
+        trend_yield = 49.5
+        avg_ge = 50.0
+        estimated_yield = round(trend_yield + (ge_pct - avg_ge) * 0.3, 1)
+        bullish_yield = round(estimated_yield - 2.0, 1)
+        bearish_yield = round(estimated_yield + 2.0, 1)
+
+        harvest_ratio = 0.979
+        estimated_prod = round(planted_acres * harvest_ratio * estimated_yield / 1e6, 1)
+        prev_year_prod = 1971.0
+
+        if estimated_prod < prev_year_prod - 50:
+            price_impact = "BULLISH - Production below last year, expect price support"
+        elif estimated_prod > prev_year_prod + 50:
+            price_impact = "BEARISH - Production above last year, expect price pressure"
+        else:
+            price_impact = "NEUTRAL - Production near last year, limited directional bias"
+
+        log(f"  [WHEAT] Planted acres: {planted_acres/1e6:.1f}M")
+        log(f"  [WHEAT] G+E condition: {ge_pct:.1f}%")
+        log(f"  [WHEAT] Estimated yield: {estimated_yield} bu/acre")
+        log(f"  [WHEAT] Estimated production: {estimated_prod}M bu")
+        log(f"  [WHEAT] Price impact: {price_impact}")
+
+        next_wasde = "2026-07-11"
+        record = {
+            "report_date": next_wasde,
+            "commodity": "wheat",
+            "planted_acres": planted_acres,
+            "ge_condition": round(ge_pct, 1),
+            "estimated_yield": estimated_yield,
+            "estimated_production": round(estimated_prod / 1000, 2),
+            "prev_year_production": round(prev_year_prod / 1000, 2),
+            "bullish_scenario_yield": bullish_yield,
+            "bearish_scenario_yield": bearish_yield,
+            "price_impact": price_impact
+        }
+
+        requests.delete(
+            f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.wheat",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        )
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/wasde_analysis",
+            headers=HEADERS,
+            data=json.dumps([record])
+        )
+        if resp.status_code in (200,201):
+            log("  Wheat WASDE pre-analysis saved!")
+        else:
+            log(f"  Wheat WASDE error: {resp.status_code} {resp.text}")
+
+    except Exception as e:
+        log(f"  Wheat WASDE analysis failed: {e}")
+
 def main():
     print("=" * 55)
     print("  AdmMedSofts - Daily Forecast Pipeline")
@@ -588,6 +681,7 @@ def main():
 
     fetch_usda_conditions()
     fetch_wasde_preanalysis()
+    fetch_wasde_preanalysis_wheat()
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
