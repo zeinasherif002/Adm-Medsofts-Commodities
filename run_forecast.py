@@ -639,6 +639,30 @@ def main():
         log(f"  11.5% Price: {w_arg:,.0f} EGP")
         log(f"  12.5% Price: {w_brz:,.0f} EGP")
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
+
+        # Calculate MAPE by comparing today's actual vs yesterday's prediction
+        w_mape_cbot = None
+        w_mape_arg  = None
+        w_mape_brz  = None
+        try:
+            yesterday_wheat = requests.get(
+                f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.wheat&order=date.desc&limit=2",
+                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            ).json()
+            if len(yesterday_wheat) >= 2:
+                yw = yesterday_wheat[1]
+                if yw.get("cbot_predicted"):
+                    w_mape_cbot = calc_mape(w_cbot, yw["cbot_predicted"])
+                    log(f"  MAPE CBOT: {w_mape_cbot}%")
+                if yw.get("arg_predicted"):
+                    w_mape_arg = calc_mape(w_arg, yw["arg_predicted"])
+                    log(f"  MAPE ARG:  {w_mape_arg}%")
+                if yw.get("brz_predicted"):
+                    w_mape_brz = calc_mape(w_brz, yw["brz_predicted"])
+                    log(f"  MAPE BRZ:  {w_mape_brz}%")
+        except Exception as em:
+            log(f"  Wheat MAPE calc failed: {em}")
+
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
             "commodity": "wheat",
@@ -654,6 +678,9 @@ def main():
             "arg_predicted": round(w_arg, 2),
             "brz_predicted": round(w_brz, 2),
         }
+        if w_mape_cbot is not None: w_record["mape_cbot"] = w_mape_cbot
+        if w_mape_arg  is not None: w_record["mape_arg"]  = w_mape_arg
+        if w_mape_brz  is not None: w_record["mape_brz"]  = w_mape_brz
         requests.delete(
             f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{w_date.strftime('%Y-%m-%d')}&commodity=eq.wheat",
             headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
