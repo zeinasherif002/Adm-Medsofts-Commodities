@@ -535,14 +535,43 @@ def main():
         w_date, w_row, wheat_series = fetch_market_data_wheat()
         ridge_115, ridge_125, w_stu, w_features, w_imports, w_demand = train_model_wheat()
         w_cbot = float(w_row["cbot_close"])
-        w_replacement = (w_cbot * dollar_rate / 27.216) + 600
-        X_w_dict = {"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_replacement, "Imports": w_imports, "Demand": w_demand}
-        X_w = pd.DataFrame([[X_w_dict.get(f, 0) for f in w_features]], columns=w_features)
-        w_arg = float(ridge_115.predict(X_w)[0])
-        w_brz = float(ridge_125.predict(X_w)[0])
+        # Direct replacement formula + rolling basis
+        BU_PER_TON = 1000.0 / 27.2155
+        FREIGHT = 25.0
+        w_local_fees = 459
+        formula_price = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
+        try:
+            wheat_df = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
+            wheat_df["formula"] = ((wheat_df["Closing CBOT"] / 100) * BU_PER_TON + FREIGHT) * wheat_df["Dollar Rate"] + wheat_df["Local Fees"].fillna(459)
+            hist_115 = wheat_df.dropna(subset=["Price 11.5%","formula"])
+            hist_115 = hist_115[hist_115["Price 11.5%"] > 0]
+            hist_125 = wheat_df.dropna(subset=["Price 12.5%","formula"])
+            hist_125 = hist_125[hist_125["Price 12.5%"] > 0]
+            basis_115 = float((hist_115["Price 11.5%"] - hist_115["formula"]).tail(6).mean())
+            basis_125 = float((hist_125["Price 12.5%"] - hist_125["formula"]).tail(6).mean())
+            log(f"  Rolling basis 11.5%: {basis_115:,.0f} EGP | 12.5%: {basis_125:,.0f} EGP")
+        except Exception as e:
+            log(f"  Basis calculation failed: {e}, using defaults")
+            basis_115 = 782
+            basis_125 = 915
+        w_arg = formula_price + basis_115
+        w_brz = formula_price + basis_125
         if w_brz < w_arg + 250:
             w_brz = w_arg + 250
+        log(f"  11.5% Price: {w_arg:,.0f} EGP | 12.5% Price: {w_brz:,.0f} EGP")
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
+        # Calculate MAPE for wheat
+        w_yesterday = None
+        try:
+            wresp = requests.get(f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.wheat&order=date.desc&limit=2", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+            wrows = wresp.json()
+            if len(wrows) >= 2: w_yesterday = wrows[1]
+        except: pass
+        w_mape_cbot = calc_mape(w_cbot, w_yesterday.get("cbot_predicted")) if w_yesterday and w_yesterday.get("cbot_predicted") else None
+        w_mape_arg = calc_mape(w_arg, w_yesterday.get("arg_predicted")) if w_yesterday and w_yesterday.get("arg_predicted") else None
+        w_mape_brz = calc_mape(w_brz, w_yesterday.get("brz_predicted")) if w_yesterday and w_yesterday.get("brz_predicted") else None
+        if w_mape_cbot: log(f"  MAPE CBOT: {w_mape_cbot}%")
+        if w_mape_arg: log(f"  MAPE ARG: {w_mape_arg}%")
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
             "commodity": "wheat",
@@ -558,6 +587,9 @@ def main():
             "arg_predicted": round(w_arg, 2),
             "brz_predicted": round(w_brz, 2),
         }
+        if w_mape_cbot: w_record["mape_cbot"] = w_mape_cbot
+        if w_mape_arg: w_record["mape_arg"] = w_mape_arg
+        if w_mape_brz: w_record["mape_brz"] = w_mape_brz
         requests.delete(
             f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{w_date.strftime('%Y-%m-%d')}&commodity=eq.wheat",
             headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
