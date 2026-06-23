@@ -380,6 +380,135 @@ def train_model_wheat():
     log(f"  Features used: {feature_cols}")
     return ridge_115, ridge_125, stu, feature_cols, latest_imports, latest_demand
 
+def fetch_usda_conditions():
+    """Fetch latest USDA crop conditions and save to Supabase."""
+    try:
+        log("Fetching USDA crop conditions...")
+        key = "35261C14-1718-33EA-8A82-9771679304D0"
+        url = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&format=JSON&state_name=US+TOTAL"
+        r = requests.get(url, timeout=15)
+        data = r.json().get("data", [])
+        if not data:
+            log("  No USDA data found")
+            return
+        latest_week = max(d["week_ending"] for d in data)
+        week_data = [d for d in data if d["week_ending"] == latest_week]
+        conditions = {}
+        for d in week_data:
+            unit = d.get("unit_desc", "")
+            val = d.get("Value", "0").replace(",","").strip()
+            try:
+                if "EXCELLENT" in unit: conditions["excellent_pct"] = float(val)
+                elif "GOOD" in unit: conditions["good_pct"] = float(val)
+                elif "FAIR" in unit: conditions["fair_pct"] = float(val)
+                elif "POOR" in unit and "VERY" not in unit: conditions["poor_pct"] = float(val)
+            except: pass
+        record = {"week_ending": latest_week, "commodity": "corn", **conditions}
+        requests.delete(f"{SUPABASE_URL}/rest/v1/usda_conditions?commodity=eq.corn", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+        resp = requests.post(f"{SUPABASE_URL}/rest/v1/usda_conditions", headers=HEADERS, data=json.dumps([record]))
+        if resp.status_code in (200, 201):
+            log(f"  USDA conditions saved! Excellent: {conditions.get('excellent_pct')}% Good: {conditions.get('good_pct')}%")
+        else:
+            log(f"  USDA upload error: {resp.status_code} {resp.text}")
+    except Exception as e:
+        log(f"  USDA fetch failed: {e}")
+
+
+def fetch_wasde_preanalysis():
+    """Generate pre-WASDE analysis for corn."""
+    try:
+        log("Generating pre-WASDE analysis...")
+        key = "35261C14-1718-33EA-8A82-9771679304D0"
+        url_acres = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=AREA+PLANTED&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
+        r_acres = requests.get(url_acres, timeout=15)
+        acres_data = r_acres.json().get("data", [])
+        planted_acres = float(acres_data[0]["Value"].replace(",","")) if acres_data else 95338000
+        url_cond = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&agg_level_desc=NATIONAL&format=JSON&state_name=US+TOTAL"
+        r_cond = requests.get(url_cond, timeout=15)
+        cond_data = r_cond.json().get("data", [])
+        ge_pct = 0
+        for d in cond_data:
+            if "EXCELLENT" in d.get("unit_desc","") or "GOOD" in d.get("unit_desc",""):
+                try: ge_pct += float(d["Value"])
+                except: pass
+        weeks = len(set(d["week_ending"] for d in cond_data if "EXCELLENT" in d.get("unit_desc","")))
+        ge_pct = ge_pct / max(weeks, 1) if weeks > 1 else ge_pct
+        trend_yield = 182.0
+        avg_ge = 68.0
+        estimated_yield = round(trend_yield + (ge_pct - avg_ge) * 0.5, 1)
+        bullish_yield = round(estimated_yield - 3, 1)
+        bearish_yield = round(estimated_yield + 3, 1)
+        estimated_prod = round(planted_acres * 0.916 * estimated_yield / 1e9, 2)
+        prev_year_prod = 15.14
+        if estimated_prod < prev_year_prod - 0.3:
+            price_impact = "BULLISH - Production below last year, expect price support"
+        elif estimated_prod > prev_year_prod + 0.3:
+            price_impact = "BEARISH - Production above last year, expect price pressure"
+        else:
+            price_impact = "NEUTRAL - Production near last year, limited directional bias"
+        log(f"  Planted acres: {planted_acres/1e6:.1f}M")
+        log(f"  G+E condition: {ge_pct:.1f}%")
+        log(f"  Estimated yield: {estimated_yield} bu/acre")
+        log(f"  Estimated production: {estimated_prod}B bu")
+        log(f"  Price impact: {price_impact}")
+        record = {"report_date": "2026-07-11", "commodity": "corn", "planted_acres": planted_acres, "ge_condition": round(ge_pct, 1), "estimated_yield": estimated_yield, "estimated_production": estimated_prod, "prev_year_production": prev_year_prod, "bullish_scenario_yield": bullish_yield, "bearish_scenario_yield": bearish_yield, "price_impact": price_impact}
+        requests.delete(f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.corn", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+        resp = requests.post(f"{SUPABASE_URL}/rest/v1/wasde_analysis", headers=HEADERS, data=json.dumps([record]))
+        if resp.status_code in (200, 201):
+            log("  WASDE pre-analysis saved!")
+        else:
+            log(f"  WASDE error: {resp.status_code} {resp.text}")
+    except Exception as e:
+        log(f"  WASDE analysis failed: {e}")
+
+
+def generate_ai_analysis(commodity, record):
+    """Generate AI market analysis using Claude API."""
+    try:
+        import os
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            log("  No ANTHROPIC_API_KEY found, skipping AI analysis")
+            return None
+        log(f"  Generating AI analysis for {commodity}...")
+        cbot = record["closing_cbot"]
+        dollar = record["dollar_rate"]
+        arg = record["arg_price"]
+        brz = record["brz_price"]
+        is_wheat = commodity == "wheat"
+        prompt = f"""You are a commodity market analyst for Egyptian grain trading.
+Analyze this data and give a concise professional report:
+
+COMMODITY: {commodity.upper()}
+DATE: {record["date"]}
+CBOT: {cbot} c/bu | O:{record.get("cbot_open","-")} H:{record.get("cbot_high","-")} L:{record.get("cbot_low","-")}
+DOLLAR: {dollar} EGP/USD
+{"11.5%: " + str(round(arg)) + " EGP | 12.5%: " + str(round(brz)) + " EGP" if is_wheat else "ARG: " + str(round(arg)) + " EGP | BRZ: " + str(round(brz)) + " EGP"}
+NEXT FORECAST: {record.get("cbot_predicted","-")} c/bu
+
+Give: 1) Price action 2) Technical outlook 3) Egypt local market impact 4) Recommendation with key levels. Max 300 words."""
+
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": "claude-haiku-4-5", "max_tokens": 800, "messages": [{"role": "user", "content": prompt}]},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            analysis = resp.json()["content"][0]["text"]
+            log(f"  AI analysis generated ({len(analysis)} chars)")
+            requests.delete(f"{SUPABASE_URL}/rest/v1/ai_analysis?date=eq.{record['date']}&commodity=eq.{commodity}", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+            requests.post(f"{SUPABASE_URL}/rest/v1/ai_analysis", headers=HEADERS, data=json.dumps([{"date": record["date"], "commodity": commodity, "analysis": analysis}]))
+            log("  AI analysis saved!")
+            return analysis
+        else:
+            log(f"  AI API error: {resp.status_code}")
+            return None
+    except Exception as e:
+        log(f"  AI analysis failed: {e}")
+        return None
+
+
 def main():
     print("=" * 55)
     print("  AdmMedSofts - Daily Forecast Pipeline")
@@ -454,7 +583,14 @@ def main():
     except Exception as e:
         log(f"  Wheat forecast failed: {e}")
 
+    fetch_usda_conditions()
+    fetch_wasde_preanalysis()
+    import os
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        generate_ai_analysis("corn", record)
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
     main()
+
+# This line intentionally left to mark end of restored file
