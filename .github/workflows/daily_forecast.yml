@@ -18,3 +18,5 @@ jobs:
         run: pip install pandas openpyxl scikit-learn yfinance requests xgboost statsmodels
       - name: Run forecast
         run: python run_forecast.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
