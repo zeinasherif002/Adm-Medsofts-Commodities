@@ -23,6 +23,8 @@ jobs:
 
       - name: Build
         run: cd dashboard && npm run build
+        env:
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

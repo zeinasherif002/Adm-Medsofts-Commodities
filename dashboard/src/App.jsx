@@ -332,7 +332,77 @@ export default function App() {
       .catch(function(e){console.error(e);});
   }
 
-  function runAI(){setAiLoad(true);setAi("");setTab("analysis");setTimeout(function(){setAi(report());setAiLoad(false);},800);}
+  function runAI(){
+    setAiLoad(true);
+    setAi("");
+    setTab("analysis");
+    var w = isWheat ? wasdeWheat : wasde;
+    var comm = isWheat ? "Wheat" : "Corn";
+    var prompt = "You are a professional commodity market analyst specializing in CBOT "+comm+" futures and Egyptian local grain markets. Write a concise, insightful market analysis report based on the following live data:\n\n"+
+      "=== MARKET DATA ("+L.date+") ===\n"+
+      "Commodity: "+comm+" | Ticker: "+(isWheat?"ZW=F":"ZCN26.CBT")+"\n"+
+      "CBOT Close: "+L.closing_cbot.toFixed(2)+" c/bu\n"+
+      "Day Change: "+(cbotD>=0?"+":"")+cbotD.toFixed(2)+" c/bu ("+(cbotD>=0?"+":"")+cbotPct.toFixed(2)+"%)\n"+
+      "Dollar Rate: "+L.dollar_rate.toFixed(2)+" EGP/USD\n"+
+      (isWheat?"11.5% Wheat: ":"ARG Corn: ")+Math.round(L.arg_price).toLocaleString()+" EGP/MT\n"+
+      (isWheat?"12.5% Wheat: ":"BRZ Corn: ")+Math.round(L.brz_price).toLocaleString()+" EGP/MT\n"+
+      "Next-Day Forecast: "+(L.cbot_predicted?L.cbot_predicted.toFixed(2)+" c/bu":"N/A")+"\n\n"+
+      "=== TECHNICAL INDICATORS ===\n"+
+      "RSI(14): "+(rsi?rsi.toFixed(1)+" ("+rsiSig+")":" N/A")+"\n"+
+      "MACD Histogram: "+(macd&&macd.histogram?macd.histogram.toFixed(4)+" ("+(macd.histogram>0?"Bullish":"Bearish")+")":"N/A")+"\n"+
+      "Z-Score: "+zs.toFixed(2)+(Math.abs(zs)>2?" — STATISTICALLY EXTREME":"")+"\n"+
+      "MA7: "+(ma7[ma7.length-1]?ma7[ma7.length-1].toFixed(2):"N/A")+" | MA21: "+(ma21[ma21.length-1]?ma21[ma21.length-1].toFixed(2):"N/A")+"\n"+
+      "Support: "+sr.support.toFixed(2)+" | Resistance: "+sr.resistance.toFixed(2)+"\n"+
+      "Bollinger: "+(boll&&boll.upper?"Upper: "+boll.upper.toFixed(2)+" Lower: "+boll.lower.toFixed(2):"N/A")+"\n"+
+      "Overall Signal: "+sig+" ("+buys+" Buy / "+sells+" Sell)\n\n"+
+      (w?"=== PRE-WASDE DATA (Next Report: "+w.report_date+") ===\n"+
+      "Planted Acres: "+(w.planted_acres/1e6).toFixed(1)+"M\n"+
+      "G+E Condition: "+w.ge_condition+"%\n"+
+      "Est. Yield: "+w.estimated_yield+" bu/acre\n"+
+      "Est. Production: "+w.estimated_production+"B bu\n"+
+      "Prev Year Production: "+w.prev_year_production+"B bu\n"+
+      "Bias: "+w.price_impact+"\n\n":"")+
+      (cropCondition&&!isWheat?"=== USDA CROP CONDITIONS ===\nExcellent: "+cropCondition.excellent+"% | Good: "+cropCondition.good+"% | G+E: "+(cropCondition.excellent+cropCondition.good)+"%\nWeek ending: "+cropCondition.week+"\n\n":"")+
+      "=== INSTRUCTIONS ===\n"+
+      "Write a professional market analysis with these sections:\n"+
+      "1. MARKET SUMMARY — 2-3 sentences on today price action\n"+
+      "2. TECHNICAL OUTLOOK — what the indicators say collectively\n"+
+      "3. KEY LEVELS TO WATCH — support/resistance and what a break means\n"+
+      "4. LOCAL MARKET IMPACT — what this means for Egyptian buyers in EGP\n"+
+      (w?"5. PRE-WASDE CONTEXT — what the crop data suggests ahead of the "+w.report_date+" report\n":"")+
+      "6. TRADING BIAS — clear BUY / SELL / NEUTRAL with brief reasoning\n\n"+
+      "Keep it sharp and professional. Use actual numbers. Max 400 words.";
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{role: "user", content: prompt}]
+      })
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.content && data.content[0] && data.content[0].text){
+        setAi(data.content[0].text);
+      } else if(data.error){
+        setAi("API Error: "+data.error.message);
+      } else {
+        setAi("No response received.");
+      }
+      setAiLoad(false);
+    })
+    .catch(function(e){
+      setAi("Error: "+e.message);
+      setAiLoad(false);
+    });
+  }
   function report(){if(!L||prices.length<5)return "Not enough data.";var lines=[],c=L.closing_cbot,p5=prices.slice(-6,-1),pct5=((c-p5[0])/p5[0]*100);lines.push("PRICE SUMMARY — "+L.date);lines.push("─────────────────────────");if(cbotD>0)lines.push("UP "+Math.abs(cbotD).toFixed(2)+" ("+Math.abs(cbotPct).toFixed(2)+"%) — "+c.toFixed(2)+" ¢/bu");else if(cbotD<0)lines.push("DOWN "+Math.abs(cbotD).toFixed(2)+" ("+Math.abs(cbotPct).toFixed(2)+"%) — "+c.toFixed(2)+" ¢/bu");else lines.push("FLAT — "+c.toFixed(2)+" ¢/bu");lines.push("5-session: "+(pct5>=0?"+":"")+pct5.toFixed(2)+"%");lines.push("");lines.push("TECHNICAL INDICATORS");lines.push("─────────────────────────");if(rsi!==null){var r="RSI(14) = "+rsi.toFixed(1)+" — ";if(rsi<30)r+="OVERSOLD";else if(rsi<45)r+="Bearish";else if(rsi<55)r+="Neutral";else if(rsi<70)r+="Bullish";else r+="OVERBOUGHT";lines.push(r);}if(macd&&macd.histogram!==null)lines.push("MACD = "+macd.histogram.toFixed(4)+" — "+(macd.histogram>0?"Bullish":"Bearish"));lines.push("Z-Score = "+zs.toFixed(2)+(Math.abs(zs)>2?" EXTREME!":""));var m7=ma7[ma7.length-1],m21=ma21[ma21.length-1];if(m7&&m21)lines.push("MA7="+m7.toFixed(2)+" MA21="+m21.toFixed(2)+" — "+(m7>m21?"Bullish":"Bearish"));lines.push("");lines.push("KEY LEVELS");lines.push("─────────────────────────");lines.push("Support: "+sr.support.toFixed(2)+" | Resistance: "+sr.resistance.toFixed(2));lines.push("");lines.push("LOCAL (EGP)");lines.push("─────────────────────────");lines.push("Dollar: "+L.dollar_rate.toFixed(2)+" | "+(isWheat?"11.5%":"ARG")+": "+Math.round(L.arg_price).toLocaleString()+" | "+(isWheat?"12.5%":"BRZ")+": "+Math.round(L.brz_price).toLocaleString());lines.push("");lines.push("SIGNAL: "+sig+" ("+buys+"B/"+sells+"S)");if(sig==="BUY")lines.push("Bullish. Watch R: "+sr.resistance.toFixed(2));else if(sig==="SELL")lines.push("Bearish. Watch S: "+sr.support.toFixed(2));else lines.push("Mixed. Wait for breakout.");return lines.join("\n");}
 
   var alerts=[];
