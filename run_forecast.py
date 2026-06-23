@@ -1,5 +1,5 @@
 """
-sed -n '228,245p' /workspaces/Adm-Medsofts-Commodities/run_forecast.pyrun_forecast.py - AdmMedSofts Daily Corn Forecast Pipeline
+run_forecast.py - AdmMedSofts Daily Corn Forecast Pipeline
 - Trains on monthly SnD data using RidgeCV (ARG/BRZ prices)
 - Runs XGBoost for CBOT next-day forecast
 - Fetches today's CBOT + dollar rate from Yahoo Finance
@@ -122,7 +122,7 @@ def fetch_market_data():
     log("Fetching CBOT corn futures from Yahoo Finance...")
     end   = datetime.today()
     start = end - timedelta(days=60)
-    corn  = yf.download("ZCN26.CBT", start=start, end=end, interval="1d", progress=False)
+    corn  = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
     if corn.empty:
         raise ValueError("Could not fetch CBOT data.")
     if isinstance(corn.columns, pd.MultiIndex):
@@ -208,16 +208,6 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
     close_series = corn_series["cbot_close"]
     cbot_next = xgb_forecast_next(close_series)
     log(f"  CBOT next-day forecast: {cbot_next:.2f} c/bu")
-    # Calculate OHLC forecast
-    high_series = corn_series["cbot_high"]
-    low_series = corn_series["cbot_low"]
-    open_series = corn_series["cbot_open"]
-    avg_range = float((high_series - low_series).tail(20).mean())
-    avg_open_diff = float((open_series - corn_series["cbot_close"].shift(1)).dropna().tail(20).mean())
-    cbot_next_open = round(cbot + avg_open_diff, 2)
-    cbot_next_high = round(cbot_next + avg_range * 0.6, 2)
-    cbot_next_low = round(cbot_next - avg_range * 0.4, 2)
-    log(f"  OHLC forecast: O:{cbot_next_open} H:{cbot_next_high} L:{cbot_next_low} C:{cbot_next:.2f}")
 
     mape_cbot = None
     mape_arg  = None
@@ -254,9 +244,6 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
         "brz_price":      round(brz, 2),
         "fut_ret": round((cbot - yesterday_close) / yesterday_close, 6) if yesterday_close else None,
         "cbot_predicted": round(cbot_next, 4),
-        "predicted_open": round(cbot_next_open, 4),
-        "predicted_high": round(cbot_next_high, 4),
-        "predicted_low": round(cbot_next_low, 4),
         "arg_predicted":  round(arg, 2),
         "brz_predicted":  round(brz, 2),
     }
@@ -269,11 +256,6 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
 
 def upload(record):
     log("Uploading to Supabase...")
-    # Delete today's record first to avoid duplicates
-    requests.delete(
-        f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{record['date']}&commodity=eq.{record['commodity']}",
-        headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-    )
     resp = requests.post(
         f"{SUPABASE_URL}/rest/v1/commodity_prices",
         headers=HEADERS,
@@ -323,6 +305,7 @@ def parse_snd_file():
                             if "Imports" in label: row["Imports"] = val2
                             if "Stock/Use" in label: row["STU"] = val2
                             if "Use- Total" in label: row["Demand"] = val2
+                            if "Ending Stock" in label: row["Ending_Stock"] = val2
                         except: pass
                     rows.append(row)
         return pd.DataFrame(rows)
@@ -331,351 +314,71 @@ def parse_snd_file():
         return None
 
 def train_model_wheat():
-    log("Training Ridge model from Wheat.xlsx...")
-    snd = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
-    snd.columns = snd.columns.astype(str).str.strip()
-    # Replace zeros with NaN
-    num_cols = snd.select_dtypes(include=[np.number]).columns
-    snd[num_cols] = snd[num_cols].replace(0, np.nan)
-    for c in ["Closing CBOT","Dollar Rate","STU","Local Fees","Imports","Demand","Price 11.5%","Price 12.5%"]:
-        if c in snd.columns:
-            snd[c] = pd.to_numeric(snd[c], errors="coerce").ffill().bfill()
-    # Fill defaults
-    if "Local Fees" not in snd.columns or snd["Local Fees"].isna().all():
-        snd["Local Fees"] = 600
-    # Compute Replacement
-    snd["Replacement"] = (snd["Closing CBOT"] * snd["Dollar Rate"] / 27.216) + snd["Local Fees"]
-    # Compute STU if missing
-    if snd["STU"].isna().any():
-        snd["STU"] = snd["STU"].fillna(snd["Ending Stock"] / snd["Demand"])
-    hist = snd.dropna(subset=["Closing CBOT","Dollar Rate","STU","Price 11.5%","Price 12.5%"]).copy()
+    log("Training Ridge model from Wheat.xlsx + S&D file...")
+    # Load Wheat.xlsx for prices, CBOT, dollar rate
+    wheat = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
+    wheat.columns = wheat.columns.astype(str).str.strip()
+    for c in wheat.columns:
+        wheat[c] = pd.to_numeric(wheat[c], errors="coerce")
+    if "Local Fees" not in wheat.columns or wheat["Local Fees"].isna().all():
+        wheat["Local Fees"] = 600
+
+    # Try to merge with new S&D file
+    snd = parse_snd_file()
+    if snd is not None and len(snd) > 0:
+        log(f"  Merging with new S&D data ({len(snd)} months)")
+        # Merge on Month if wheat has Month column
+        if "Month" in wheat.columns:
+            snd["Month"] = snd["Month"].astype(str).str.strip()
+            wheat["Month"] = wheat["Month"].astype(str).str.strip()
+            merged = wheat.merge(snd[["Month","STU","Imports","Demand"]], on="Month", how="left", suffixes=("_old",""))
+            # Use new STU/Imports/Demand where available
+            for col in ["STU","Imports","Demand"]:
+                if col+"_old" in merged.columns:
+                    merged[col] = merged[col].fillna(merged[col+"_old"])
+                    merged.drop(columns=[col+"_old"], inplace=True)
+            hist = merged.dropna(subset=["Closing CBOT","Dollar Rate","Price 11.5%","Price 12.5%"]).copy()
+        else:
+            hist = wheat.dropna(subset=["Closing CBOT","Dollar Rate","Price 11.5%","Price 12.5%"]).copy()
+        # Get latest STU from new S&D
+        latest_stu = snd["STU"].dropna().iloc[-1] if "STU" in snd.columns else None
+    else:
+        hist = wheat.dropna(subset=["Closing CBOT","Dollar Rate","Price 11.5%","Price 12.5%"]).copy()
+        latest_stu = None
+
     log(f"  Training on {len(hist)} monthly rows")
+    # Compute Replacement
+    hist["Replacement"] = (hist["Closing CBOT"] * hist["Dollar Rate"] / 27.216) + hist.get("Local Fees", 600)
+    # Fill missing STU
+    if "STU" not in hist.columns or hist["STU"].isna().all():
+        hist["STU"] = hist["Ending Stock"] / hist["Demand"] if "Ending Stock" in hist.columns else 2.5
+    hist["STU"] = pd.to_numeric(hist["STU"], errors="coerce").fillna(2.5)
+
     feature_cols = ["Closing CBOT","Dollar Rate","STU","Local Fees","Replacement"]
-    # Add Imports and Demand if available
     if "Imports" in hist.columns and hist["Imports"].notna().sum() > 5:
         feature_cols.append("Imports")
     if "Demand" in hist.columns and hist["Demand"].notna().sum() > 5:
         feature_cols.append("Demand")
     feature_cols = [c for c in feature_cols if c in hist.columns]
     X = hist[feature_cols].fillna(hist[feature_cols].mean())
+
     def fit_ridge(X, y):
         return Pipeline([("scaler", StandardScaler()),("ridge", RidgeCV(alphas=[0.01,0.1,1.0,10.0,50.0]))]).fit(X, y)
     ridge_115 = fit_ridge(X, hist["Price 11.5%"])
     ridge_125 = fit_ridge(X, hist["Price 12.5%"])
-    stu = float(hist["STU"].iloc[-1])
+
+    # Get latest STU
+    if latest_stu is not None:
+        stu = float(latest_stu)
+    else:
+        stu = float(hist["STU"].iloc[-1])
+    # Get latest Imports and Demand from S&D
+    latest_imports = float(snd["Imports"].dropna().iloc[-1]) if snd is not None and "Imports" in snd.columns else 700
+    latest_demand = float(snd["Demand"].dropna().iloc[-1]) if snd is not None and "Demand" in snd.columns else 683
+
     log(f"  Latest STU: {stu:.4f}")
     log(f"  Features used: {feature_cols}")
-    # Get latest imports and demand from S&D
-    snd = parse_snd_file()
-    latest_imports = 700000
-    latest_demand = 769000
     return ridge_115, ridge_125, stu, feature_cols, latest_imports, latest_demand
-
-def fetch_usda_conditions():
-    """Fetch latest USDA crop conditions and save to Supabase."""
-    try:
-        log("Fetching USDA crop conditions...")
-        key = "35261C14-1718-33EA-8A82-9771679304D0"
-        url = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&format=JSON&state_name=US+TOTAL"
-        r = requests.get(url, timeout=15)
-        data = r.json().get("data", [])
-        if not data:
-            log("  No USDA data found")
-            return
-        # Get latest week
-        latest_week = max(d["week_ending"] for d in data)
-        week_data = [d for d in data if d["week_ending"] == latest_week]
-        conditions = {}
-        for d in week_data:
-            unit = d.get("unit_desc", "")
-            val = d.get("Value", "0").replace(",","").strip()
-            try:
-                if "EXCELLENT" in unit: conditions["excellent_pct"] = float(val)
-                elif "GOOD" in unit: conditions["good_pct"] = float(val)
-                elif "FAIR" in unit: conditions["fair_pct"] = float(val)
-                elif "POOR" in unit and "VERY" not in unit: conditions["poor_pct"] = float(val)
-            except: pass
-        record = {
-            "week_ending": latest_week,
-            "commodity": "corn",
-            **conditions
-        }
-        # Delete old and insert new
-        requests.delete(
-            f"{SUPABASE_URL}/rest/v1/usda_conditions?commodity=eq.corn",
-            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-        )
-        resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/usda_conditions",
-            headers=HEADERS,
-            data=json.dumps([record])
-        )
-        if resp.status_code in (200, 201):
-            log(f"  USDA conditions saved! Excellent: {conditions.get('excellent_pct')}% Good: {conditions.get('good_pct')}%")
-        else:
-            log(f"  USDA upload error: {resp.status_code} {resp.text}")
-    except Exception as e:
-        log(f"  USDA fetch failed: {e}")
-
-def fetch_wasde_preanalysis():
-    """Generate pre-WASDE analysis based on USDA crop conditions and planted acres."""
-    try:
-        log("Generating pre-WASDE analysis...")
-        from datetime import date
-        key = "35261C14-1718-33EA-8A82-9771679304D0"
-
-        # Get planted acres
-        url_acres = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=AREA+PLANTED&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
-        r_acres = requests.get(url_acres, timeout=15)
-        acres_data = r_acres.json().get("data", [])
-        planted_acres = float(acres_data[0]["Value"].replace(",","")) if acres_data else 95338000
-
-        # Get latest crop conditions
-        url_cond = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=CORN&statisticcat_desc=CONDITION&year=2026&agg_level_desc=NATIONAL&format=JSON&state_name=US+TOTAL"
-        r_cond = requests.get(url_cond, timeout=15)
-        cond_data = r_cond.json().get("data", [])
-        ge_pct = 0
-        for d in cond_data:
-            if "EXCELLENT" in d.get("unit_desc","") or "GOOD" in d.get("unit_desc",""):
-                try: ge_pct += float(d["Value"])
-                except: pass
-        # Get latest week only (divide by number of weeks)
-        weeks = len(set(d["week_ending"] for d in cond_data if "EXCELLENT" in d.get("unit_desc","")))
-        ge_pct = ge_pct / max(weeks, 1) if weeks > 1 else ge_pct
-
-        # Estimate yield using trend + condition adjustment
-        # Base trend yield 2026: ~182 bu/acre
-        # G+E 68% = average conditions = trend yield
-        # Each 1% above/below average G+E ~ 0.5 bu/acre adjustment
-        trend_yield = 182.0
-        avg_ge = 68.0  # historical average
-        yield_adjustment = (ge_pct - avg_ge) * 0.5
-        estimated_yield = round(trend_yield + yield_adjustment, 1)
-
-        # Scenarios
-        bullish_yield = round(estimated_yield - 3, 1)  # weather stress
-        bearish_yield = round(estimated_yield + 3, 1)  # perfect weather
-
-        # Production estimates (harvested = planted x 0.916)
-        harvest_ratio = 0.916
-        estimated_prod = round(planted_acres * harvest_ratio * estimated_yield / 1e9, 2)
-        prev_year_prod = 15.14  # 2025 record billion bushels
-
-        # Price impact assessment
-        if estimated_prod < prev_year_prod - 0.3:
-            price_impact = "BULLISH - Production below last year, expect price support"
-        elif estimated_prod > prev_year_prod + 0.3:
-            price_impact = "BEARISH - Production above last year, expect price pressure"
-        else:
-            price_impact = "NEUTRAL - Production near last year, limited directional bias"
-
-        log(f"  Planted acres: {planted_acres/1e6:.1f}M")
-        log(f"  G+E condition: {ge_pct:.1f}%")
-        log(f"  Estimated yield: {estimated_yield} bu/acre")
-        log(f"  Estimated production: {estimated_prod}B bu")
-        log(f"  Price impact: {price_impact}")
-
-        # Next WASDE date
-        next_wasde = "2026-07-11"
-
-        record = {
-            "report_date": next_wasde,
-            "commodity": "corn",
-            "planted_acres": planted_acres,
-            "ge_condition": round(ge_pct, 1),
-            "estimated_yield": estimated_yield,
-            "estimated_production": estimated_prod,
-            "prev_year_production": prev_year_prod,
-            "bullish_scenario_yield": bullish_yield,
-            "bearish_scenario_yield": bearish_yield,
-            "price_impact": price_impact
-        }
-
-        # Delete old and insert new
-        requests.delete(
-            f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.corn",
-            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-        )
-        resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/wasde_analysis",
-            headers=HEADERS,
-            data=json.dumps([record])
-        )
-        if resp.status_code in (200, 201):
-            log("  WASDE pre-analysis saved!")
-        else:
-            log(f"  WASDE error: {resp.status_code} {resp.text}")
-
-    except Exception as e:
-        log(f"  WASDE analysis failed: {e}")
-
-
-def fetch_wasde_preanalysis_wheat():
-    """Generate pre-WASDE analysis for wheat based on USDA crop conditions and planted acres."""
-    try:
-        log("Generating pre-WASDE wheat analysis...")
-        key = "35261C14-1718-33EA-8A82-9771679304D0"
-
-        url_acres = (
-            f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}"
-            f"&commodity_desc=WHEAT&statisticcat_desc=AREA+PLANTED"
-            f"&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
-        )
-        r_acres = requests.get(url_acres, timeout=15)
-        acres_data = r_acres.json().get("data", [])
-        all_wheat = [d for d in acres_data if d.get("class_desc","") in ("ALL CLASSES","")]
-        if all_wheat:
-            planted_acres = float(all_wheat[0]["Value"].replace(",",""))
-        elif acres_data:
-            planted_acres = float(acres_data[0]["Value"].replace(",",""))
-        else:
-            planted_acres = 47000000
-
-        url_cond = (
-            f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}"
-            f"&commodity_desc=WHEAT&statisticcat_desc=CONDITION"
-            f"&year=2026&agg_level_desc=NATIONAL&format=JSON&state_name=US+TOTAL"
-        )
-        r_cond = requests.get(url_cond, timeout=15)
-        cond_data = r_cond.json().get("data", [])
-
-        ge_pct = 0
-        for d in cond_data:
-            if "EXCELLENT" in d.get("unit_desc","").upper() or "GOOD" in d.get("unit_desc","").upper():
-                try: ge_pct += float(d["Value"])
-                except: pass
-        weeks = len(set(d["week_ending"] for d in cond_data if "EXCELLENT" in d.get("unit_desc","").upper()))
-        ge_pct = ge_pct / max(weeks,1) if weeks > 1 else ge_pct
-        if ge_pct == 0: ge_pct = 48.0
-
-        trend_yield = 49.5
-        avg_ge = 50.0
-        estimated_yield = round(trend_yield + (ge_pct - avg_ge) * 0.3, 1)
-        bullish_yield = round(estimated_yield - 2.0, 1)
-        bearish_yield = round(estimated_yield + 2.0, 1)
-
-        harvest_ratio = 0.979
-        estimated_prod = round(planted_acres * harvest_ratio * estimated_yield / 1e6, 1)
-        prev_year_prod = 1971.0
-
-        if estimated_prod < prev_year_prod - 50:
-            price_impact = "BULLISH - Production below last year, expect price support"
-        elif estimated_prod > prev_year_prod + 50:
-            price_impact = "BEARISH - Production above last year, expect price pressure"
-        else:
-            price_impact = "NEUTRAL - Production near last year, limited directional bias"
-
-        log(f"  [WHEAT] Planted acres: {planted_acres/1e6:.1f}M")
-        log(f"  [WHEAT] G+E condition: {ge_pct:.1f}%")
-        log(f"  [WHEAT] Estimated yield: {estimated_yield} bu/acre")
-        log(f"  [WHEAT] Estimated production: {estimated_prod}M bu")
-        log(f"  [WHEAT] Price impact: {price_impact}")
-
-        next_wasde = "2026-07-11"
-        record = {
-            "report_date": next_wasde,
-            "commodity": "wheat",
-            "planted_acres": planted_acres,
-            "ge_condition": round(ge_pct, 1),
-            "estimated_yield": estimated_yield,
-            "estimated_production": round(estimated_prod / 1000, 2),
-            "prev_year_production": round(prev_year_prod / 1000, 2),
-            "bullish_scenario_yield": bullish_yield,
-            "bearish_scenario_yield": bearish_yield,
-            "price_impact": price_impact
-        }
-
-        requests.delete(
-            f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.wheat",
-            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-        )
-        resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/wasde_analysis",
-            headers=HEADERS,
-            data=json.dumps([record])
-        )
-        if resp.status_code in (200,201):
-            log("  Wheat WASDE pre-analysis saved!")
-        else:
-            log(f"  Wheat WASDE error: {resp.status_code} {resp.text}")
-
-    except Exception as e:
-        log(f"  Wheat WASDE analysis failed: {e}")
-
-def generate_ai_analysis(commodity, record, prices_history, rsi=None, macd=None, zscore=None, support=None, resistance=None, crop_condition=None, wasde=None):
-    """Generate AI market analysis using Claude API."""
-    try:
-        import os
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            log("  No ANTHROPIC_API_KEY found, skipping AI analysis")
-            return None
-        log(f"  Generating AI analysis for {commodity}...")
-        
-        cbot = record["closing_cbot"]
-        dollar = record["dollar_rate"]
-        arg = record["arg_price"]
-        brz = record["brz_price"]
-        is_wheat = commodity == "wheat"
-        
-        # Calculate 5-session change
-        pct5 = ""
-        if len(prices_history) >= 6:
-            prev = prices_history[-6]
-            pct5 = f"{((cbot - prev) / prev * 100):.2f}%"
-        
-        prompt = f"""You are a commodity market analyst specializing in CBOT futures and Egyptian grain markets.
-
-Analyze this market data and provide a concise professional report:
-
-COMMODITY: {commodity.upper()}
-DATE: {record['date']}
-CBOT CLOSE: {cbot} c/bu
-CBOT OHLC: O:{record.get('cbot_open','-')} H:{record.get('cbot_high','-')} L:{record.get('cbot_low','-')} C:{cbot}
-DOLLAR RATE: {dollar} EGP/USD
-{"11.5% LOCAL: " + str(round(arg)) + " EGP | 12.5% LOCAL: " + str(round(brz)) + " EGP" if is_wheat else "ARG LOCAL: " + str(round(arg)) + " EGP | BRZ LOCAL: " + str(round(brz)) + " EGP"}
-RSI(14): {str(round(rsi,1)) if rsi is not None else 'N/A'}
-MACD: {str(round(macd,4)) if macd is not None else 'N/A'}
-Z-SCORE: {str(round(zscore,2)) if zscore is not None else 'N/A'}
-SUPPORT: {str(round(support,2)) if support is not None else 'N/A'} | RESISTANCE: {str(round(resistance,2)) if resistance is not None else 'N/A'}
-5-SESSION CHANGE: {pct5}
-{f"USDA G+E CONDITIONS: {crop_condition}%" if crop_condition else ""}
-{f"PRE-WASDE: Est. yield {wasde.get('estimated_yield')} bu/ac ({wasde.get('price_impact','').split(' - ')[0]})" if wasde else ""}
-
-Provide a structured analysis with:
-1. PRICE ACTION (2-3 sentences)
-2. TECHNICAL OUTLOOK (RSI, MACD, key levels)
-3. FUNDAMENTAL DRIVERS (what's moving the market)
-4. EGYPT LOCAL MARKET (impact on local prices)
-5. RECOMMENDATION (BUY/SELL/HOLD with specific price levels)
-
-Be concise and actionable. Max 400 words."""
-
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
-            json={
-                "model": "claude-haiku-4-5",
-                "max_tokens": 1000,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
-        )
-        
-        if resp.status_code == 200:
-            analysis = resp.json()["content"][0]["text"]
-            log(f"  AI analysis generated ({len(analysis)} chars)")
-            return analysis
-        else:
-            log(f"  AI API error: {resp.status_code}")
-            return None
-    except Exception as e:
-        log(f"  AI analysis failed: {e}")
-        return None
 
 def main():
     print("=" * 55)
@@ -703,56 +406,14 @@ def main():
         w_date, w_row, wheat_series = fetch_market_data_wheat()
         ridge_115, ridge_125, w_stu, w_features, w_imports, w_demand = train_model_wheat()
         w_cbot = float(w_row["cbot_close"])
-        # Direct replacement formula + rolling basis
-        BU_PER_TON = 1000.0 / 27.2155
-        FREIGHT = 25.0
-        w_local_fees = 459
-        formula_price = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
-        try:
-            wheat_df = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
-            wheat_df["formula"] = ((wheat_df["Closing CBOT"] / 100) * BU_PER_TON + FREIGHT) * wheat_df["Dollar Rate"] + wheat_df["Local Fees"].fillna(459)
-            hist_115 = wheat_df.dropna(subset=["Price 11.5%","formula"])
-            hist_115 = hist_115[hist_115["Price 11.5%"] > 0]
-            hist_125 = wheat_df.dropna(subset=["Price 12.5%","formula"])
-            hist_125 = hist_125[hist_125["Price 12.5%"] > 0]
-            basis_115 = float((hist_115["Price 11.5%"] - hist_115["formula"]).tail(6).mean())
-            basis_125 = float((hist_125["Price 12.5%"] - hist_125["formula"]).tail(6).mean())
-            log(f"  Rolling basis 11.5%: {basis_115:,.0f} EGP | 12.5%: {basis_125:,.0f} EGP")
-        except Exception as e:
-            log(f"  Basis calculation failed: {e}, using defaults")
-            basis_115 = 1749
-            basis_125 = 1977
-        w_arg = formula_price + basis_115
-        w_brz = formula_price + basis_125
+        w_replacement = (w_cbot * dollar_rate / 27.216) + 600
+        X_w_dict = {"Closing CBOT": w_cbot, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_replacement, "Imports": w_imports, "Demand": w_demand}
+        X_w = pd.DataFrame([[X_w_dict.get(f, 0) for f in w_features]], columns=w_features)
+        w_arg = float(ridge_115.predict(X_w)[0])
+        w_brz = float(ridge_125.predict(X_w)[0])
         if w_brz < w_arg + 250:
             w_brz = w_arg + 250
-        log(f"  11.5% Price: {w_arg:,.0f} EGP (formula: {formula_price:,.0f} + basis: {basis_115:,.0f})")
-        log(f"  12.5% Price: {w_brz:,.0f} EGP (formula: {formula_price:,.0f} + basis: {basis_125:,.0f})")
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
-
-        # Calculate MAPE by comparing today's actual vs yesterday's prediction
-        w_mape_cbot = None
-        w_mape_arg  = None
-        w_mape_brz  = None
-        try:
-            yesterday_wheat = requests.get(
-                f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.wheat&order=date.desc&limit=2",
-                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-            ).json()
-            if len(yesterday_wheat) >= 2:
-                yw = yesterday_wheat[1]
-                if yw.get("cbot_predicted"):
-                    w_mape_cbot = calc_mape(w_cbot, yw["cbot_predicted"])
-                    log(f"  MAPE CBOT: {w_mape_cbot}%")
-                if yw.get("arg_predicted"):
-                    w_mape_arg = calc_mape(w_arg, yw["arg_predicted"])
-                    log(f"  MAPE ARG:  {w_mape_arg}%")
-                if yw.get("brz_predicted"):
-                    w_mape_brz = calc_mape(w_brz, yw["brz_predicted"])
-                    log(f"  MAPE BRZ:  {w_mape_brz}%")
-        except Exception as em:
-            log(f"  Wheat MAPE calc failed: {em}")
-
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
             "commodity": "wheat",
@@ -768,9 +429,6 @@ def main():
             "arg_predicted": round(w_arg, 2),
             "brz_predicted": round(w_brz, 2),
         }
-        if w_mape_cbot is not None: w_record["mape_cbot"] = w_mape_cbot
-        if w_mape_arg  is not None: w_record["mape_arg"]  = w_mape_arg
-        if w_mape_brz  is not None: w_record["mape_brz"]  = w_mape_brz
         requests.delete(
             f"{SUPABASE_URL}/rest/v1/commodity_prices?date=eq.{w_date.strftime('%Y-%m-%d')}&commodity=eq.wheat",
             headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
@@ -784,8 +442,8 @@ def main():
         w_arg_5 = []
         w_brz_5 = []
         for p in w_cbot_5:
-            w_rep = (p * dollar_rate / 27.216) + w_local_fees
-            X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": w_local_fees, "Replacement": w_rep, "Imports": w_imports, "Demand": w_demand}.get(f, 0) for f in w_features]], columns=w_features)
+            w_rep = (p * dollar_rate / 27.216) + 600
+            X_wp = pd.DataFrame([[{"Closing CBOT": p, "Dollar Rate": dollar_rate, "STU": w_stu, "Local Fees": 600, "Replacement": w_rep, "Imports": w_imports, "Demand": w_demand}.get(f, 0) for f in w_features]], columns=w_features)
             a5 = float(ridge_115.predict(X_wp)[0])
             b5 = float(ridge_125.predict(X_wp)[0])
             if b5 < a5 + 250:
@@ -796,20 +454,8 @@ def main():
     except Exception as e:
         log(f"  Wheat forecast failed: {e}")
 
-    fetch_usda_conditions()
-    fetch_wasde_preanalysis()
-    # Generate AI analysis for corn
-    try:
-        import os
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            ai_text = generate_ai_analysis("corn", record, [r["closing_cbot"] for r in fetch_yesterday_predictions.__wrapped__ if r] if hasattr(fetch_yesterday_predictions, "__wrapped__") else [])
-            if ai_text:
-                requests.delete(f"{SUPABASE_URL}/rest/v1/ai_analysis?date=eq.{record['date']}&commodity=eq.corn", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
-                requests.post(f"{SUPABASE_URL}/rest/v1/ai_analysis", headers=HEADERS, data=json.dumps([{"date": record['date'], "commodity": "corn", "analysis": ai_text}]))
-    except Exception as e:
-        log(f"  AI analysis call failed: {e}")
-    fetch_wasde_preanalysis_wheat()
     print("\nPipeline complete! Dashboard is now up to date.")
 
 if __name__ == "__main__":
     main()
+gh run list --limit 1 --json databaseId --jq '.[0].databaseId' | xargs gh run view --log-failed 2>/dev/null | grep -A5 "error\|Error\|ERROR" | head -30
