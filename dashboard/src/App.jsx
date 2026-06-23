@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { useState, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
