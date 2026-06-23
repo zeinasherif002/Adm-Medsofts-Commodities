@@ -142,9 +142,7 @@ export default function App() {
 
 
   async function generateWasdeReport(){
-    var { jsPDF } = window.jspdf || {};
-    if(!jsPDF){ var jspdfMod = await import('jspdf'); jsPDF = jspdfMod.jsPDF; }
-    var doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+    // PDF export removed
     var W = doc.internal.pageSize.getWidth();
     var H = doc.internal.pageSize.getHeight();
     var today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
