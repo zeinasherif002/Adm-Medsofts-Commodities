@@ -1,3 +1,4 @@
+import { jsPDF } from 'jspdf';
 import { useState, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -119,9 +120,7 @@ export default function App() {
     var script = document.createElement('script');
     script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
     document.head.appendChild(script);
-    var script2 = document.createElement('script');
-    script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    document.head.appendChild(script2);
+
   },[]);
 
   useEffect(function(){loadData(commodity);loadWeekly(commodity);loadWasde();if(commodity==="corn"){loadCropCondition();}var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
@@ -144,8 +143,7 @@ export default function App() {
 
 
   function generateWasdeReport(){
-    var jsPDF = window.jspdf && window.jspdf.jsPDF;
-    if(!jsPDF){ alert("PDF library still loading, please try again in a moment."); return; }
+    // jsPDF loaded via import
     var doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
     var W = doc.internal.pageSize.getWidth();
     var H = doc.internal.pageSize.getHeight();
