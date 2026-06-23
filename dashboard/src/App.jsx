@@ -322,6 +322,17 @@ export default function App() {
     doc.save("AdmMedSofts_PreWASDE_"+comm+"_"+today.replace(/ /g,"_")+".pdf");
   }
 
+  function loadAIAnalysis(){
+    fetch(SUPABASE_URL+"/rest/v1/ai_analysis?commodity=eq."+commodity+"&order=created_at.desc&limit=1",{headers:HEADERS})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data&&data.length>0&&data[0].analysis){
+          setAi(data[0].analysis);
+        }
+      })
+      .catch(function(e){console.error(e);});
+  }
+
   function runAI(){setAiLoad(true);setAi("");setTab("analysis");setTimeout(function(){setAi(report());setAiLoad(false);},800);}
   function report(){if(!L||prices.length<5)return "Not enough data.";var lines=[],c=L.closing_cbot,p5=prices.slice(-6,-1),pct5=((c-p5[0])/p5[0]*100);lines.push("PRICE SUMMARY — "+L.date);lines.push("─────────────────────────");if(cbotD>0)lines.push("UP "+Math.abs(cbotD).toFixed(2)+" ("+Math.abs(cbotPct).toFixed(2)+"%) — "+c.toFixed(2)+" ¢/bu");else if(cbotD<0)lines.push("DOWN "+Math.abs(cbotD).toFixed(2)+" ("+Math.abs(cbotPct).toFixed(2)+"%) — "+c.toFixed(2)+" ¢/bu");else lines.push("FLAT — "+c.toFixed(2)+" ¢/bu");lines.push("5-session: "+(pct5>=0?"+":"")+pct5.toFixed(2)+"%");lines.push("");lines.push("TECHNICAL INDICATORS");lines.push("─────────────────────────");if(rsi!==null){var r="RSI(14) = "+rsi.toFixed(1)+" — ";if(rsi<30)r+="OVERSOLD";else if(rsi<45)r+="Bearish";else if(rsi<55)r+="Neutral";else if(rsi<70)r+="Bullish";else r+="OVERBOUGHT";lines.push(r);}if(macd&&macd.histogram!==null)lines.push("MACD = "+macd.histogram.toFixed(4)+" — "+(macd.histogram>0?"Bullish":"Bearish"));lines.push("Z-Score = "+zs.toFixed(2)+(Math.abs(zs)>2?" EXTREME!":""));var m7=ma7[ma7.length-1],m21=ma21[ma21.length-1];if(m7&&m21)lines.push("MA7="+m7.toFixed(2)+" MA21="+m21.toFixed(2)+" — "+(m7>m21?"Bullish":"Bearish"));lines.push("");lines.push("KEY LEVELS");lines.push("─────────────────────────");lines.push("Support: "+sr.support.toFixed(2)+" | Resistance: "+sr.resistance.toFixed(2));lines.push("");lines.push("LOCAL (EGP)");lines.push("─────────────────────────");lines.push("Dollar: "+L.dollar_rate.toFixed(2)+" | "+(isWheat?"11.5%":"ARG")+": "+Math.round(L.arg_price).toLocaleString()+" | "+(isWheat?"12.5%":"BRZ")+": "+Math.round(L.brz_price).toLocaleString());lines.push("");lines.push("SIGNAL: "+sig+" ("+buys+"B/"+sells+"S)");if(sig==="BUY")lines.push("Bullish. Watch R: "+sr.resistance.toFixed(2));else if(sig==="SELL")lines.push("Bearish. Watch S: "+sr.support.toFixed(2));else lines.push("Mixed. Wait for breakout.");return lines.join("\n");}
 

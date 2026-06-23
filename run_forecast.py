@@ -602,6 +602,81 @@ def fetch_wasde_preanalysis_wheat():
     except Exception as e:
         log(f"  Wheat WASDE analysis failed: {e}")
 
+def generate_ai_analysis(commodity, record, prices_history, rsi=None, macd=None, zscore=None, support=None, resistance=None, crop_condition=None, wasde=None):
+    """Generate AI market analysis using Claude API."""
+    try:
+        import os
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            log("  No ANTHROPIC_API_KEY found, skipping AI analysis")
+            return None
+        log(f"  Generating AI analysis for {commodity}...")
+        
+        cbot = record["closing_cbot"]
+        dollar = record["dollar_rate"]
+        arg = record["arg_price"]
+        brz = record["brz_price"]
+        is_wheat = commodity == "wheat"
+        
+        # Calculate 5-session change
+        pct5 = ""
+        if len(prices_history) >= 6:
+            prev = prices_history[-6]
+            pct5 = f"{((cbot - prev) / prev * 100):.2f}%"
+        
+        prompt = f"""You are a commodity market analyst specializing in CBOT futures and Egyptian grain markets.
+
+Analyze this market data and provide a concise professional report:
+
+COMMODITY: {commodity.upper()}
+DATE: {record['date']}
+CBOT CLOSE: {cbot} c/bu
+CBOT OHLC: O:{record.get('cbot_open','-')} H:{record.get('cbot_high','-')} L:{record.get('cbot_low','-')} C:{cbot}
+DOLLAR RATE: {dollar} EGP/USD
+{"11.5% LOCAL: " + str(round(arg)) + " EGP | 12.5% LOCAL: " + str(round(brz)) + " EGP" if is_wheat else "ARG LOCAL: " + str(round(arg)) + " EGP | BRZ LOCAL: " + str(round(brz)) + " EGP"}
+RSI(14): {str(round(rsi,1)) if rsi is not None else 'N/A'}
+MACD: {str(round(macd,4)) if macd is not None else 'N/A'}
+Z-SCORE: {str(round(zscore,2)) if zscore is not None else 'N/A'}
+SUPPORT: {str(round(support,2)) if support is not None else 'N/A'} | RESISTANCE: {str(round(resistance,2)) if resistance is not None else 'N/A'}
+5-SESSION CHANGE: {pct5}
+{f"USDA G+E CONDITIONS: {crop_condition}%" if crop_condition else ""}
+{f"PRE-WASDE: Est. yield {wasde.get('estimated_yield')} bu/ac ({wasde.get('price_impact','').split(' - ')[0]})" if wasde else ""}
+
+Provide a structured analysis with:
+1. PRICE ACTION (2-3 sentences)
+2. TECHNICAL OUTLOOK (RSI, MACD, key levels)
+3. FUNDAMENTAL DRIVERS (what's moving the market)
+4. EGYPT LOCAL MARKET (impact on local prices)
+5. RECOMMENDATION (BUY/SELL/HOLD with specific price levels)
+
+Be concise and actionable. Max 400 words."""
+
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-haiku-4-5",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+        
+        if resp.status_code == 200:
+            analysis = resp.json()["content"][0]["text"]
+            log(f"  AI analysis generated ({len(analysis)} chars)")
+            return analysis
+        else:
+            log(f"  AI API error: {resp.status_code}")
+            return None
+    except Exception as e:
+        log(f"  AI analysis failed: {e}")
+        return None
+
 def main():
     print("=" * 55)
     print("  AdmMedSofts - Daily Forecast Pipeline")
@@ -628,16 +703,31 @@ def main():
         w_date, w_row, wheat_series = fetch_market_data_wheat()
         ridge_115, ridge_125, w_stu, w_features, w_imports, w_demand = train_model_wheat()
         w_cbot = float(w_row["cbot_close"])
-        # Direct replacement formula
+        # Direct replacement formula + rolling basis
         BU_PER_TON = 1000.0 / 27.2155
         FREIGHT = 25.0
         w_local_fees = 459
-        w_arg = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
-        w_brz = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
+        formula_price = ((w_cbot / 100) * BU_PER_TON + FREIGHT) * dollar_rate + w_local_fees
+        try:
+            wheat_df = pd.read_excel("Wheat.xlsx", sheet_name="SnD")
+            wheat_df["formula"] = ((wheat_df["Closing CBOT"] / 100) * BU_PER_TON + FREIGHT) * wheat_df["Dollar Rate"] + wheat_df["Local Fees"].fillna(459)
+            hist_115 = wheat_df.dropna(subset=["Price 11.5%","formula"])
+            hist_115 = hist_115[hist_115["Price 11.5%"] > 0]
+            hist_125 = wheat_df.dropna(subset=["Price 12.5%","formula"])
+            hist_125 = hist_125[hist_125["Price 12.5%"] > 0]
+            basis_115 = float((hist_115["Price 11.5%"] - hist_115["formula"]).tail(6).mean())
+            basis_125 = float((hist_125["Price 12.5%"] - hist_125["formula"]).tail(6).mean())
+            log(f"  Rolling basis 11.5%: {basis_115:,.0f} EGP | 12.5%: {basis_125:,.0f} EGP")
+        except Exception as e:
+            log(f"  Basis calculation failed: {e}, using defaults")
+            basis_115 = 1749
+            basis_125 = 1977
+        w_arg = formula_price + basis_115
+        w_brz = formula_price + basis_125
         if w_brz < w_arg + 250:
             w_brz = w_arg + 250
-        log(f"  11.5% Price: {w_arg:,.0f} EGP")
-        log(f"  12.5% Price: {w_brz:,.0f} EGP")
+        log(f"  11.5% Price: {w_arg:,.0f} EGP (formula: {formula_price:,.0f} + basis: {basis_115:,.0f})")
+        log(f"  12.5% Price: {w_brz:,.0f} EGP (formula: {formula_price:,.0f} + basis: {basis_125:,.0f})")
         w_next = xgb_forecast_next(wheat_series["cbot_close"])
 
         # Calculate MAPE by comparing today's actual vs yesterday's prediction
@@ -708,6 +798,16 @@ def main():
 
     fetch_usda_conditions()
     fetch_wasde_preanalysis()
+    # Generate AI analysis for corn
+    try:
+        import os
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            ai_text = generate_ai_analysis("corn", record, [r["closing_cbot"] for r in fetch_yesterday_predictions.__wrapped__ if r] if hasattr(fetch_yesterday_predictions, "__wrapped__") else [])
+            if ai_text:
+                requests.delete(f"{SUPABASE_URL}/rest/v1/ai_analysis?date=eq.{record['date']}&commodity=eq.corn", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+                requests.post(f"{SUPABASE_URL}/rest/v1/ai_analysis", headers=HEADERS, data=json.dumps([{"date": record['date'], "commodity": "corn", "analysis": ai_text}]))
+    except Exception as e:
+        log(f"  AI analysis call failed: {e}")
     fetch_wasde_preanalysis_wheat()
     print("\nPipeline complete! Dashboard is now up to date.")
 
