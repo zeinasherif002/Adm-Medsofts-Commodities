@@ -122,7 +122,7 @@ def fetch_market_data():
     log("Fetching CBOT corn futures from Yahoo Finance...")
     end   = datetime.today()
     start = end - timedelta(days=60)
-    corn  = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
+    corn  = yf.download("ZCN26.CBT", start=start, end=end, interval="1d", progress=False)
     if corn.empty:
         raise ValueError("Could not fetch CBOT data.")
     if isinstance(corn.columns, pd.MultiIndex):
@@ -458,4 +458,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-gh run list --limit 1 --json databaseId --jq '.[0].databaseId' | xargs gh run view --log-failed 2>/dev/null | grep -A5 "error\|Error\|ERROR" | head -30
