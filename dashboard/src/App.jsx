@@ -1,5 +1,3 @@
-import { jsPDF } from 'jspdf';
-import { jsPDF } from 'jspdf';
 import { useState, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -143,8 +141,9 @@ export default function App() {
   var cd=dates.map(function(date,i){return{date:date,close:prices[i]!==undefined?parseFloat(prices[i].toFixed(2)):null,ma7:ma7[i]!==null?parseFloat(ma7[i].toFixed(2)):null,ma21:ma21[i]!==null?parseFloat(ma21[i].toFixed(2)):null,upper:bollA[i].upper!==null?parseFloat(bollA[i].upper.toFixed(2)):null,lower:bollA[i].lower!==null?parseFloat(bollA[i].lower.toFixed(2)):null,rsi:rsiA[i]!==null?parseFloat(rsiA[i].toFixed(2)):null,histogram:macdA[i].histogram!==null?parseFloat(macdA[i].histogram.toFixed(4)):null,ret:data[data.length-1-i]&&data[data.length-1-i].fut_ret?parseFloat((data[data.length-1-i].fut_ret*100).toFixed(2)):null};});
 
 
-  function generateWasdeReport(){
-    // jsPDF loaded via import
+  async function generateWasdeReport(){
+    var { jsPDF } = window.jspdf || {};
+    if(!jsPDF){ var jspdfMod = await import('jspdf'); jsPDF = jspdfMod.jsPDF; }
     var doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
     var W = doc.internal.pageSize.getWidth();
     var H = doc.internal.pageSize.getHeight();
