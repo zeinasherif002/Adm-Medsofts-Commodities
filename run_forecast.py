@@ -122,7 +122,10 @@ def fetch_market_data():
     log("Fetching CBOT corn futures from Yahoo Finance...")
     end   = datetime.today()
     start = end - timedelta(days=60)
-    corn  = yf.download("ZCN26.CBT", start=start, end=end, interval="1d", progress=False)
+    corn = yf.download("ZCU26.CBT", start=start, end=end, interval="1d", progress=False)
+    if corn.empty:
+        log("  ZCU26 failed, trying ZC=F...")
+        corn = yf.download("ZC=F", start=start, end=end, interval="1d", progress=False)
     if corn.empty:
         raise ValueError("Could not fetch CBOT data.")
     if isinstance(corn.columns, pd.MultiIndex):
@@ -208,6 +211,13 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
     close_series = corn_series["cbot_close"]
     cbot_next = xgb_forecast_next(close_series)
     log(f"  CBOT next-day forecast: {cbot_next:.2f} c/bu")
+    # Calculate OHLC forecast
+    avg_range = float((corn_series["cbot_high"] - corn_series["cbot_low"]).tail(20).mean())
+    avg_open_diff = float((corn_series["cbot_open"] - corn_series["cbot_close"].shift(1)).dropna().tail(20).mean())
+    cbot_next_open = round(cbot + avg_open_diff, 2)
+    cbot_next_high = round(cbot_next + avg_range * 0.6, 2)
+    cbot_next_low = round(cbot_next - avg_range * 0.6, 2)
+    log(f"  OHLC forecast: O:{cbot_next_open} H:{cbot_next_high} L:{cbot_next_low} C:{cbot_next:.2f}")
 
     mape_cbot = None
     mape_arg  = None
@@ -244,6 +254,9 @@ def run_forecast(date, row, dollar_rate, ridge_arg, ridge_brz, stu, corn_series,
         "brz_price":      round(brz, 2),
         "fut_ret": round((cbot - yesterday_close) / yesterday_close, 6) if yesterday_close else None,
         "cbot_predicted": round(cbot_next, 4),
+        "predicted_open": round(cbot_next_open, 4),
+        "predicted_high": round(cbot_next_high, 4),
+        "predicted_low": round(cbot_next_low, 4),
         "arg_predicted":  round(arg, 2),
         "brz_predicted":  round(brz, 2),
     }
