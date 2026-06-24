@@ -163,6 +163,20 @@ export default function App() {
 
   },[]);
 
+  useEffect(function(){
+    function updateCountdown(){
+      var wasdeDate = new Date('2026-07-11T12:00:00-04:00');
+      var now = new Date();
+      var diff = wasdeDate - now;
+      var days = Math.ceil(diff / (1000*60*60*24));
+      var el = document.getElementById('wasde-days');
+      if(el) el.textContent = days > 0 ? days : 'Today!';
+    }
+    updateCountdown();
+    var timer = setInterval(updateCountdown, 60000);
+    return function(){clearInterval(timer);};
+  },[]);
+
   useEffect(function(){loadData(commodity);loadWeekly(commodity);loadWasde();if(commodity==="corn"){loadCropCondition();}var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
 
   var L=data[0],P=data[1];
@@ -469,6 +483,36 @@ export default function App() {
   {wasdeWheat&&commodity==="wheat"&&<div style={{background:C.card,border:"1px solid rgba(27,58,140,0.3)",borderRadius:16,padding:"16px 20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontSize:13,fontWeight:700,color:C.blue}}>🌾 Wheat Pre-WASDE Analysis — Next Report: {wasdeWheat.report_date}</div><div style={{fontSize:11,padding:"3px 10px",borderRadius:6,fontWeight:700,background:wasdeWheat.price_impact&&wasdeWheat.price_impact.includes("BULL")?"rgba(92,184,92,0.15)":wasdeWheat.price_impact&&wasdeWheat.price_impact.includes("BEAR")?"rgba(248,113,113,0.15)":"rgba(251,191,36,0.15)",color:wasdeWheat.price_impact&&wasdeWheat.price_impact.includes("BULL")?C.green:wasdeWheat.price_impact&&wasdeWheat.price_impact.includes("BEAR")?C.red:C.amber}}>{wasdeWheat.price_impact&&wasdeWheat.price_impact.split(" - ")[0]}</div></div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>{[{label:"Planted Acres",value:wasdeWheat.planted_acres?(wasdeWheat.planted_acres/1e6).toFixed(1)+"M":"—"},{label:"G+E Condition",value:wasdeWheat.ge_condition?wasdeWheat.ge_condition+"%":"—"},{label:"Est. Yield",value:wasdeWheat.estimated_yield?wasdeWheat.estimated_yield+" bu/ac":"—"},{label:"Est. Production",value:wasdeWheat.estimated_production?wasdeWheat.estimated_production+"B bu":"—"}].map(function(item,i){return(<div key={i} style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{item.label}</div><div style={{fontSize:14,fontWeight:700,color:C.text}}>{item.value}</div></div>);})}</div><div style={{fontSize:12,color:C.text,lineHeight:1.6,marginBottom:10}}>{wasdeWheat.price_impact&&wasdeWheat.price_impact.split(" - ")[1]}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><div style={{background:"rgba(92,184,92,0.08)",borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.green,fontWeight:700,marginBottom:4}}>BULLISH SCENARIO</div><div style={{fontSize:12,color:C.text}}>Yield drops to {wasdeWheat.bullish_scenario_yield} bu/ac → prices rally</div></div><div style={{background:"rgba(248,113,113,0.08)",borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.red,fontWeight:700,marginBottom:4}}>BEARISH SCENARIO</div><div style={{fontSize:12,color:C.text}}>Yield rises to {wasdeWheat.bearish_scenario_yield} bu/ac → prices fall</div></div></div></div>}
   {cropCondition&&commodity==="corn"&&<div style={{background:C.card,border:"1px solid rgba(92,184,92,0.3)",borderRadius:16,padding:"16px 20px"}}><div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:10}}>USDA Crop Conditions — Week ending {cropCondition.week}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>{[{label:"Excellent",value:cropCondition.excellent+"%",color:C.green},{label:"Good",value:cropCondition.good+"%",color:C.blue},{label:"Good+Excellent",value:(cropCondition.excellent+cropCondition.good)+"%",color:C.blue},{label:"vs Avg (68%)",value:(cropCondition.excellent+cropCondition.good)>=68?"Above avg":"Below avg",color:(cropCondition.excellent+cropCondition.good)>=68?C.green:C.red}].map(function(item,i){return(<div key={i} style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{item.label}</div><div style={{fontSize:14,fontWeight:700,color:item.color}}>{item.value}</div></div>);})}</div></div>}
   {(!wasde&&!wasdeWheat)&&<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"32px",textAlign:"center",color:C.sub}}>No WASDE data available. Switch to Corn to see pre-WASDE analysis.</div>}
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Next WASDE Countdown</div>
+      <div style={{textAlign:"center",padding:"16px 0"}}>
+        <div style={{fontSize:48,fontWeight:700,color:C.blue}} id="wasde-days">--</div>
+        <div style={{fontSize:13,color:C.sub,marginTop:4}}>days until July 11, 2026</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:4}}>12:00 PM Washington DC · 7:00 PM Cairo</div>
+      </div>
+      <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",marginTop:4}}>
+        <div style={{fontSize:11,color:C.sub}}>Key watch: First 2026 yield estimate — market expects ~181-182 bu/acre</div>
+      </div>
+    </div>
+    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Historical WASDE Price Reaction</div>
+      {[
+        {month:"Jul 2025",change:"+3.2%",dir:1,note:"Yield cut to 179.3 bu/ac"},
+        {month:"Aug 2025",change:"-1.8%",dir:-1,note:"Good crop weather"},
+        {month:"Sep 2025",change:"+1.1%",dir:1,note:"Export demand strong"},
+        {month:"Oct 2025",change:"-2.4%",dir:-1,note:"Record production raised"},
+        {month:"Nov 2025",change:"-0.9%",dir:-1,note:"Large ending stocks"},
+        {month:"Jun 2026",change:"?",dir:0,note:"First 2026 yield estimate"}
+      ].map(function(row,i){return(
+        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:i===0?"none":"1px solid "+C.border}}>
+          <div style={{fontSize:12,color:C.sub}}>{row.month}</div>
+          <div style={{fontSize:12,color:row.dir===1?C.green:row.dir===-1?C.red:C.amber,fontWeight:700}}>{row.change}</div>
+          <div style={{fontSize:11,color:C.muted,maxWidth:150,textAlign:"right"}}>{row.note}</div>
+        </div>
+      );})}
+    </div>
+  </div>
 </div>)}
 {tab==="weekly"&&(<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,overflow:"hidden"}}><div style={{padding:"18px 22px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>Weekly Price Forecast</div><div style={{fontSize:11,color:C.sub}}>Next 5 trading days · Base ± 2% range</div></div><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}><thead><tr style={{background:C.bg}}>{["Date","CBOT Low","CBOT Base","CBOT High",isWheat?"11.5% (EGP)":"ARG (EGP)",isWheat?"12.5% (EGP)":"BRZ (EGP)"].map(function(h){return <th key={h} style={{padding:"12px 18px",textAlign:"left",color:C.sub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</th>;})}</tr></thead><tbody>{weekly.length===0?(<tr><td colSpan="6" style={{padding:"28px",textAlign:"center",color:C.sub}}>No forecast data</td></tr>):weekly.map(function(row,i){var base=Number(row.cbot_forecast);var low=(base*0.98).toFixed(2);var high=(base*1.02).toFixed(2);return(<tr key={i} style={{borderTop:"1px solid "+C.border,background:i===0?"rgba(79,142,247,0.05)":"transparent"}}><td style={{padding:"12px 18px",color:i===0?C.blue:C.text,fontWeight:i===0?700:500}}>{row.forecast_date}</td><td style={{padding:"12px 18px",color:C.red,fontWeight:600}}>{low}</td><td style={{padding:"12px 18px",color:C.blue,fontWeight:700}}>{base.toFixed(2)}</td><td style={{padding:"12px 18px",color:C.green,fontWeight:600}}>{high}</td><td style={{padding:"12px 18px",color:C.green,fontWeight:700}}>{row.arg_forecast?Math.round(row.arg_forecast).toLocaleString():"—"}</td><td style={{padding:"12px 18px",color:C.amber,fontWeight:700}}>{row.brz_forecast?Math.round(row.brz_forecast).toLocaleString():"—"}</td></tr>);})}</tbody></table></div>)}
             {tab==="news"&&(
