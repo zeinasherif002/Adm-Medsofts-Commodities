@@ -464,7 +464,7 @@ def fetch_wasde_preanalysis():
         log(f"  Estimated yield: {estimated_yield} bu/acre")
         log(f"  Estimated production: {estimated_prod}B bu")
         log(f"  Price impact: {price_impact}")
-        record = {"report_date": "2026-07-11", "commodity": "corn", "planted_acres": planted_acres, "ge_condition": round(ge_pct, 1), "estimated_yield": estimated_yield, "estimated_production": estimated_prod, "prev_year_production": prev_year_prod, "bullish_scenario_yield": bullish_yield, "bearish_scenario_yield": bearish_yield, "price_impact": price_impact}
+        record = {"report_date": "2026-07-10", "commodity": "corn", "planted_acres": planted_acres, "ge_condition": round(ge_pct, 1), "estimated_yield": estimated_yield, "estimated_production": estimated_prod, "prev_year_production": prev_year_prod, "bullish_scenario_yield": bullish_yield, "bearish_scenario_yield": bearish_yield, "price_impact": price_impact}
         requests.delete(f"{SUPABASE_URL}/rest/v1/wasde_analysis?commodity=eq.corn", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
         resp = requests.post(f"{SUPABASE_URL}/rest/v1/wasde_analysis", headers=HEADERS, data=json.dumps([record]))
         if resp.status_code in (200, 201):

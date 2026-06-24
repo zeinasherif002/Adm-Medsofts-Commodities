@@ -84,7 +84,7 @@ export default function App() {
     setWasdeChat(function(prev){return [...prev,{role:"user",content:userMsg}];});
     setWasdeChatLoading(true);
     var context = "You are a WASDE report specialist for ADM MedSofts Egypt. " +
-      "Next WASDE: July 11 2026. " +
+      "Next WASDE: July 10 2026. " +
       (wasde ? "Corn: planted "+( wasde.planted_acres/1e6).toFixed(1)+"M acres, G+E "+wasde.ge_condition+"%, est yield "+wasde.estimated_yield+" bu/ac, "+wasde.price_impact+". " : "") +
       (wasdeWheat ? "Wheat: planted "+(wasdeWheat.planted_acres/1e6).toFixed(1)+"M acres, G+E "+wasdeWheat.ge_condition+"%, "+wasdeWheat.price_impact+". " : "") +
       "Use web search for latest WASDE expectations and analyst forecasts. Be specific and actionable.";
@@ -196,7 +196,7 @@ export default function App() {
 
   useEffect(function(){
     function updateCountdown(){
-      var wasdeDate = new Date('2026-07-11T12:00:00-04:00');
+      var wasdeDate = new Date('2026-07-10T12:00:00-04:00');
       var now = new Date();
       var diff = wasdeDate - now;
       var days = Math.ceil(diff / (1000*60*60*24));
@@ -253,7 +253,7 @@ export default function App() {
     var isBull = w && w.price_impact && w.price_impact.includes("BULL");
     var isBear = w && w.price_impact && w.price_impact.includes("BEAR");
     var bias = isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL";
-    var nextWasde = w ? w.report_date : "2026-07-11";
+    var nextWasde = w ? w.report_date : "2026-07-10";
     var acres = w ? (w.planted_acres/1e6).toFixed(1) : "N/A";
     var neutral7Low=(cbot*0.985).toFixed(2),neutral7High=(cbot*1.015).toFixed(2);
     var neutral30Low=(cbot*0.970).toFixed(2),neutral30High=(cbot*1.010).toFixed(2);
@@ -521,7 +521,7 @@ export default function App() {
       <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Next WASDE Countdown</div>
       <div style={{textAlign:"center",padding:"16px 0"}}>
         <div style={{fontSize:48,fontWeight:700,color:C.blue}} id="wasde-days">--</div>
-        <div style={{fontSize:13,color:C.sub,marginTop:4}}>days until July 11, 2026</div>
+        <div style={{fontSize:13,color:C.sub,marginTop:4}}>days until July 10, 2026</div>
         <div style={{fontSize:11,color:C.muted,marginTop:4}}>12:00 PM Washington DC · 7:00 PM Cairo</div>
       </div>
       <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",marginTop:4}}>
@@ -558,7 +558,7 @@ export default function App() {
     <div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:8,padding:"12px"}}><div style={{fontSize:10,color:C.red,fontWeight:700,marginBottom:4}}>BEARISH — Break below {fmt(sr.support)}</div><div style={{fontSize:12,color:C.text}}>Target: {fmt(Math.round(sr.support*0.95))} ¢/bu</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>Good weather · USDA raise · weak demand</div></div>
   </div>
   <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,overflow:"hidden"}}>
-    <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>🤖 WASDE AI Assistant</div><div style={{fontSize:11,color:C.sub}}>Ask about WASDE expectations · scenarios · trading strategy</div></div>
+    <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>🤖 WASDE AI Assistant  </div><div style={{fontSize:11,color:C.sub}}>Ask about WASDE expectations · scenarios · trading strategy</div></div>
     <div style={{height:280,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}} id="wasde-chat-messages">{wasdeChat.map(function(msg,i){return(<div key={i} style={{display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start"}}><div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,background:msg.role==="user"?"linear-gradient(135deg,"+C.blue+","+C.purple+")":C.bg,border:msg.role==="user"?"none":"1px solid "+C.border,color:msg.role==="user"?"#fff":C.text,fontSize:12,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{msg.content}</div></div>);})}{wasdeChatLoading&&<div style={{display:"flex",justifyContent:"flex-start"}}><div style={{padding:"10px 14px",borderRadius:12,background:C.bg,border:"1px solid "+C.border,color:C.sub,fontSize:12}}>Analyzing WASDE data...</div></div>}</div>
     <div style={{padding:"12px 16px",borderTop:"1px solid "+C.border,display:"flex",gap:8}}><input value={wasdeChatInput} onChange={function(e){setWasdeChatInput(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();sendWasdeChat();}}} placeholder="Ask about WASDE... (e.g. what will July WASDE show for corn?)" style={{flex:1,background:C.bg,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:12,outline:"none"}}/><button onClick={sendWasdeChat} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,"+C.blue+","+C.purple+")",color:"#fff",fontSize:12,cursor:"pointer",fontWeight:600}}>Send</button></div>
   </div>
