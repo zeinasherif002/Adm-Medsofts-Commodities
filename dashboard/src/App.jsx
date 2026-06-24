@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { jsPDF } from "jspdf";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const SUPABASE_URL = "https://cupcsspfmkgbcovtgszm.supabase.co";
@@ -242,7 +243,8 @@ export default function App() {
 
 
   async function generateWasdeReport(){
-    // PDF export removed
+    var { jsPDF } = window.jspdf || {};
+    var doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
     var W = doc.internal.pageSize.getWidth();
     var H = doc.internal.pageSize.getHeight();
     var today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
