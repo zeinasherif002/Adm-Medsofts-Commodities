@@ -550,7 +550,13 @@ export default function App() {
         {month:"Sep 2025",change:"+1.1%",dir:1,note:"Export demand strong"},
         {month:"Oct 2025",change:"-2.4%",dir:-1,note:"Record production raised"},
         {month:"Nov 2025",change:"-0.9%",dir:-1,note:"Large ending stocks"},
-        {month:"Jun 2026",change:"?",dir:0,note:"First 2026 yield estimate"}
+        {month:"Dec 2025",change:"?",dir:0,note:"Dec 12, 2025"},
+        {month:"Jan 2026",change:"?",dir:0,note:"Jan 10, 2026"},
+        {month:"Feb 2026",change:"?",dir:0,note:"Feb 11, 2026"},
+        {month:"Mar 2026",change:"?",dir:0,note:"Mar 11, 2026"},
+        {month:"Apr 2026",change:"?",dir:0,note:"Apr 10, 2026"},
+        {month:"May 2026",change:"?",dir:0,note:"May 9, 2026"},
+        {month:"Jun 2026",change:"?",dir:0,note:"Jun 11, 2026 — passed"}
       ].map(function(row,i){return(
         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:i===0?"none":"1px solid "+C.border}}>
           <div style={{fontSize:12,color:C.sub}}>{row.month}</div>
