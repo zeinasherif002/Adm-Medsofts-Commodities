@@ -562,6 +562,7 @@ export default function App() {
 
 {tab==="wasde"&&L&&sr&&(<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
   <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel</div>
+  <div style={{height:220,position:"relative",marginBottom:14}}><canvas ref={channelChartRef} style={{width:"100%",height:"100%"}}/></div>
   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
     {[{label:"Current",value:fmt(L.closing_cbot)+" ¢",color:C.blue},{label:"Support",value:fmt(sr.support)+" ¢",color:C.green},{label:"Resistance",value:fmt(sr.resistance)+" ¢",color:C.red},{label:"Channel",value:fmt(sr.resistance-sr.support)+" ¢",color:C.sub}].map(function(item,i){return(<div key={i} style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{item.label}</div><div style={{fontSize:15,fontWeight:700,color:item.color}}>{item.value}</div></div>);})}
   </div>
