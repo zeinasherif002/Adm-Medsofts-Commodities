@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const SUPABASE_URL = "https://cupcsspfmkgbcovtgszm.supabase.co";
@@ -38,6 +38,8 @@ export default function App() {
   var [wasdeChat,setWasdeChat]=useState([{role:"assistant",content:"Hello! Ask me anything about the upcoming WASDE report — expectations, scenarios, or trading strategy."}]);
   var [wasdeChatInput,setWasdeChatInput]=useState("");
   var [wasdeChatLoading,setWasdeChatLoading]=useState(false);
+  var channelChartRef = useRef(null);
+  var channelChartInstance = useRef(null);
   var [wasdeWheat,setWasdeWheat]=useState(null);
 
   function sendChatMessage(){
@@ -194,21 +196,31 @@ export default function App() {
 
   },[]);
 
+  var wasdeDate = new Date('2026-07-10T12:00:00-04:00');
+  var wdDiff = wasdeDate - new Date();
+  var wdDays = wdDiff > 0 ? Math.ceil(wdDiff / (1000*60*60*24)) : 0;
+
   useEffect(function(){
-    function updateCountdown(){
-      var wasdeDate = new Date('2026-07-10T12:00:00-04:00');
-      var now = new Date();
-      var diff = wasdeDate - now;
-      var days = Math.ceil(diff / (1000*60*60*24));
-      var el = document.getElementById('wasde-days');
-      if(el) el.textContent = days > 0 ? days : 'Today!';
-      var el2 = document.getElementById('wasde-days-2');
-      if(el2) el2.textContent = days > 0 ? days : 'Today!';
+    if(tab==="wasde" && L && sr && channelChartRef.current){
+      if(channelChartInstance.current) channelChartInstance.current.destroy();
+      var ctx = channelChartRef.current.getContext("2d");
+      var labels = ["Now","+1W","+2W","+3W","+4W","Jul 10 WASDE"];
+      var curr = L.closing_cbot;
+      var sup = sr.support;
+      var res = sr.resistance;
+      channelChartInstance.current = new window.Chart(ctx, {
+        type:"line",
+        data:{labels:labels,datasets:[
+          {label:"Resistance",data:new Array(6).fill(res),borderColor:"#E24B4A",borderWidth:2,pointRadius:0,fill:false,tension:0},
+          {label:"Support",data:new Array(6).fill(sup),borderColor:"#1D9E75",borderWidth:2,pointRadius:0,fill:"+1",backgroundColor:"rgba(55,138,221,0.06)",tension:0},
+          {label:"Current",data:[curr,null,null,null,null,null],borderColor:"#378ADD",borderWidth:2.5,pointRadius:[6,0,0,0,0,0],pointBackgroundColor:"#378ADD",fill:false},
+          {label:"Bullish",data:[curr,curr+5,curr+12,curr+20,res+3,Math.round(res*1.06)],borderColor:"#639922",borderWidth:2,borderDash:[6,4],pointRadius:[0,0,0,0,0,5],pointBackgroundColor:"#639922",fill:false,tension:0.3},
+          {label:"Bearish",data:[curr,curr-5,curr-12,curr-20,sup-3,Math.round(sup*0.95)],borderColor:"#E24B4A",borderWidth:2,borderDash:[6,4],pointRadius:[0,0,0,0,0,5],pointBackgroundColor:"#E24B4A",fill:false,tension:0.3}
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:"rgba(128,128,128,0.1)"},ticks:{font:{size:11}}},y:{min:Math.round(sup*0.93),max:Math.round(res*1.08),grid:{color:"rgba(128,128,128,0.1)"},ticks:{font:{size:11},callback:function(v){return v+" ¢";}}}}}
+      });
     }
-    updateCountdown();
-    var timer = setInterval(updateCountdown, 60000);
-    return function(){clearInterval(timer);};
-  },[]);
+  },[tab,L,sr]);
 
   useEffect(function(){loadData(commodity);loadWeekly(commodity);loadWasde();if(commodity==="corn"){loadCropCondition();}var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
 
@@ -520,7 +532,7 @@ export default function App() {
     <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
       <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Next WASDE Countdown</div>
       <div style={{textAlign:"center",padding:"16px 0"}}>
-        <div style={{fontSize:48,fontWeight:700,color:C.blue}} id="wasde-days">--</div>
+        <div style={{fontSize:48,fontWeight:700,color:C.blue}} id="wasde-days">{wdDays > 0 ? wdDays : "Today!"}</div>
         <div style={{fontSize:13,color:C.sub,marginTop:4}}>days until July 10, 2026</div>
         <div style={{fontSize:11,color:C.muted,marginTop:4}}>12:00 PM Washington DC · 7:00 PM Cairo</div>
       </div>
