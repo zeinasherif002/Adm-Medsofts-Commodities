@@ -543,7 +543,7 @@ export default function App() {
       </div>
     </div>
     <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
-      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Historical WASDE Price Reaction</div>
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Historical WASDE Price Reaction *</div>
       {[
         {month:"Jul 2025",change:"+3.2%",dir:1,note:"Yield cut to 179.3 bu/ac"},
         {month:"Aug 2025",change:"-1.8%",dir:-1,note:"Good crop weather"},
