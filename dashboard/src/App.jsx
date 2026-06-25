@@ -569,14 +569,36 @@ export default function App() {
 </div>)}
 
 {tab==="wasde"&&L&&sr&&(<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
-  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel</div>
+  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel & Scenarios</div>
   <div style={{height:220,position:"relative",marginBottom:14}}><canvas ref={channelChartRef} style={{width:"100%",height:"100%"}}/></div>
-  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
-    {[{label:"Current",value:fmt(L.closing_cbot)+" ¢",color:C.blue},{label:"Support",value:fmt(sr.support)+" ¢",color:C.green},{label:"Resistance",value:fmt(sr.resistance)+" ¢",color:C.red},{label:"Channel",value:fmt(sr.resistance-sr.support)+" ¢",color:C.sub}].map(function(item,i){return(<div key={i} style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{item.label}</div><div style={{fontSize:15,fontWeight:700,color:item.color}}>{item.value}</div></div>);})}
-  </div>
-  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-    <div style={{background:"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:8,padding:"12px"}}><div style={{fontSize:10,color:C.green,fontWeight:700,marginBottom:4}}>BULLISH — Break above {fmt(sr.resistance)}</div><div style={{fontSize:12,color:C.text}}>Target: {fmt(Math.round(sr.resistance*1.06))} ¢/bu</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>USDA yield cut · weather stress · China buying</div></div>
-    <div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:8,padding:"12px"}}><div style={{fontSize:10,color:C.red,fontWeight:700,marginBottom:4}}>BEARISH — Break below {fmt(sr.support)}</div><div style={{fontSize:12,color:C.text}}>Target: {fmt(Math.round(sr.support*0.95))} ¢/bu</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>Good weather · USDA raise · weak demand</div></div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+    <div style={{background:"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:10,padding:"14px"}}>
+      <div style={{fontSize:11,color:C.green,fontWeight:700,marginBottom:8}}>🐂 BULLISH SCENARIO</div>
+      <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA yield cut / weather stress</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.green}}>{L?fmt(L.closing_cbot):"—"}</div></div>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>RESISTANCE</div><div style={{fontSize:13,fontWeight:700,color:C.green}}>{sr?fmt(Math.round(sr.resistance*1.06)):"—"}</div></div>
+      </div>
+      <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.green}}>{L&&sr?fmt(L.closing_cbot)+" → "+fmt(Math.round(sr.resistance*1.06)):"—"}</div></div>
+    </div>
+    <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,padding:"14px"}}>
+      <div style={{fontSize:11,color:C.amber,fontWeight:700,marginBottom:8}}>➡️ NEUTRAL SCENARIO</div>
+      <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA in line with expectations</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.amber}}>{sr?fmt(sr.support):"—"}</div></div>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>RESISTANCE</div><div style={{fontSize:13,fontWeight:700,color:C.amber}}>{sr?fmt(sr.resistance):"—"}</div></div>
+      </div>
+      <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.amber}}>{sr?fmt(sr.support)+" → "+fmt(sr.resistance):"—"}</div></div>
+    </div>
+    <div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10,padding:"14px"}}>
+      <div style={{fontSize:11,color:C.red,fontWeight:700,marginBottom:8}}>🐻 BEARISH SCENARIO</div>
+      <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA raises yield / good weather</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.red}}>{sr?fmt(Math.round(sr.support*0.95)):"—"}</div></div>
+        <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>RESISTANCE</div><div style={{fontSize:13,fontWeight:700,color:C.red}}>{L?fmt(L.closing_cbot):"—"}</div></div>
+      </div>
+      <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.red}}>{L&&sr?fmt(Math.round(sr.support*0.95))+" → "+fmt(L.closing_cbot):"—"}</div></div>
+    </div>
   </div>
   <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,overflow:"hidden"}}>
     <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>🤖 WASDE AI Assistant  </div><div style={{fontSize:11,color:C.sub}}>Ask about WASDE expectations · scenarios · trading strategy</div></div>
