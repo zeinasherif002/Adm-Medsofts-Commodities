@@ -39,6 +39,7 @@ export default function App() {
   var [wasdeChat,setWasdeChat]=useState([{role:"assistant",content:"Hello! Ask me anything about the upcoming WASDE report — expectations, scenarios, or trading strategy."}]);
   var [wasdeChatInput,setWasdeChatInput]=useState("");
   var [wasdeChatLoading,setWasdeChatLoading]=useState(false);
+  var [selectedScenario,setSelectedScenario]=useState("neutral");
   var channelChartRef = useRef(null);
   var channelChartInstance = useRef(null);
   var [wasdeWheat,setWasdeWheat]=useState(null);
@@ -207,8 +208,8 @@ export default function App() {
       var ctx = channelChartRef.current.getContext("2d");
       var labels = ["Now","+1W","+2W","+3W","+4W","Jul 10 WASDE"];
       var curr = L.closing_cbot;
-      var sup = sr.support;
-      var res = sr.resistance;
+      var sup = selectedScenario==="bullish" ? curr : selectedScenario==="bearish" ? Math.round(sr.support*0.95) : sr.support;
+      var res = selectedScenario==="bullish" ? Math.round(sr.resistance*1.06) : selectedScenario==="bearish" ? curr : sr.resistance;
       channelChartInstance.current = new window.Chart(ctx, {
         type:"line",
         data:{labels:labels,datasets:[
@@ -221,7 +222,7 @@ export default function App() {
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:"rgba(128,128,128,0.1)"},ticks:{font:{size:11}}},y:{min:Math.round(sup*0.93),max:Math.round(res*1.08),grid:{color:"rgba(128,128,128,0.1)"},ticks:{font:{size:11},callback:function(v){return v+" ¢";}}}}}
       });
     }
-  },[tab,L,sr]);
+  },[tab,L,sr,selectedScenario]);
 
   useEffect(function(){loadData(commodity);loadWeekly(commodity);loadWasde();if(commodity==="corn"){loadCropCondition();}var iv=setInterval(function(){loadData(commodity);},5*60*1000);return function(){clearInterval(iv);};},[commodity]);
 
@@ -572,7 +573,7 @@ export default function App() {
   <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel & Scenarios</div>
   <div style={{height:220,position:"relative",marginBottom:14}}><canvas ref={channelChartRef} style={{width:"100%",height:"100%"}}/></div>
   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-    <div style={{background:"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:10,padding:"14px"}}>
+    <div onClick={function(){setSelectedScenario("bullish");}} style={{background:selectedScenario==="bullish"?"rgba(92,184,92,0.2)":"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:10,padding:"14px",cursor:"pointer",transition:"all 0.2s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.green,fontWeight:700}}>🐂 BULLISH</div><div style={{fontSize:13,fontWeight:800,color:C.green,background:"rgba(92,184,92,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"45%":(cropCondition.excellent+cropCondition.good)<68?"35%":(cropCondition.excellent+cropCondition.good)<75?"25%":"20%":"30%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA yield cut / weather stress</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
@@ -581,7 +582,7 @@ export default function App() {
       </div>
       <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.green}}>{L&&sr?fmt(L.closing_cbot)+" → "+fmt(Math.round(sr.resistance*1.06)):"—"}</div></div>
     </div>
-    <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,padding:"14px"}}>
+    <div onClick={function(){setSelectedScenario("neutral");}} style={{background:selectedScenario==="neutral"?"rgba(251,191,36,0.2)":"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,padding:"14px",cursor:"pointer",transition:"all 0.2s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.amber,fontWeight:700}}>➡️ NEUTRAL</div><div style={{fontSize:13,fontWeight:800,color:C.amber,background:"rgba(251,191,36,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"30%":(cropCondition.excellent+cropCondition.good)<68?"35%":(cropCondition.excellent+cropCondition.good)<75?"40%":"35%":"35%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA in line with expectations</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
@@ -590,7 +591,7 @@ export default function App() {
       </div>
       <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.amber}}>{sr?fmt(sr.support)+" → "+fmt(sr.resistance):"—"}</div></div>
     </div>
-    <div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10,padding:"14px"}}>
+    <div onClick={function(){setSelectedScenario("bearish");}} style={{background:selectedScenario==="bearish"?"rgba(248,113,113,0.2)":"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10,padding:"14px",cursor:"pointer",transition:"all 0.2s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.red,fontWeight:700}}>🐻 BEARISH</div><div style={{fontSize:13,fontWeight:800,color:C.red,background:"rgba(248,113,113,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"25%":(cropCondition.excellent+cropCondition.good)<68?"30%":(cropCondition.excellent+cropCondition.good)<75?"35%":"45%":"35%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA raises yield / good weather</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
