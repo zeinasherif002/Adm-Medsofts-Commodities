@@ -573,7 +573,7 @@ export default function App() {
   <div style={{height:220,position:"relative",marginBottom:14}}><canvas ref={channelChartRef} style={{width:"100%",height:"100%"}}/></div>
   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
     <div style={{background:"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:10,padding:"14px"}}>
-      <div style={{fontSize:11,color:C.green,fontWeight:700,marginBottom:8}}>🐂 BULLISH SCENARIO</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.green,fontWeight:700}}>🐂 BULLISH</div><div style={{fontSize:13,fontWeight:800,color:C.green,background:"rgba(92,184,92,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"45%":(cropCondition.excellent+cropCondition.good)<68?"35%":(cropCondition.excellent+cropCondition.good)<75?"25%":"20%":"30%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA yield cut / weather stress</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
         <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.green}}>{L?fmt(L.closing_cbot):"—"}</div></div>
@@ -582,7 +582,7 @@ export default function App() {
       <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.green}}>{L&&sr?fmt(L.closing_cbot)+" → "+fmt(Math.round(sr.resistance*1.06)):"—"}</div></div>
     </div>
     <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,padding:"14px"}}>
-      <div style={{fontSize:11,color:C.amber,fontWeight:700,marginBottom:8}}>➡️ NEUTRAL SCENARIO</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.amber,fontWeight:700}}>➡️ NEUTRAL</div><div style={{fontSize:13,fontWeight:800,color:C.amber,background:"rgba(251,191,36,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"30%":(cropCondition.excellent+cropCondition.good)<68?"35%":(cropCondition.excellent+cropCondition.good)<75?"40%":"35%":"35%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA in line with expectations</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
         <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.amber}}>{sr?fmt(sr.support):"—"}</div></div>
@@ -591,7 +591,7 @@ export default function App() {
       <div style={{background:C.bg,borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>CHANNEL</div><div style={{fontSize:12,fontWeight:700,color:C.amber}}>{sr?fmt(sr.support)+" → "+fmt(sr.resistance):"—"}</div></div>
     </div>
     <div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10,padding:"14px"}}>
-      <div style={{fontSize:11,color:C.red,fontWeight:700,marginBottom:8}}>🐻 BEARISH SCENARIO</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,color:C.red,fontWeight:700}}>🐻 BEARISH</div><div style={{fontSize:13,fontWeight:800,color:C.red,background:"rgba(248,113,113,0.15)",padding:"2px 8px",borderRadius:6}}>{cropCondition?(cropCondition.excellent+cropCondition.good)<60?"25%":(cropCondition.excellent+cropCondition.good)<68?"30%":(cropCondition.excellent+cropCondition.good)<75?"35%":"45%":"35%"}</div></div>
       <div style={{fontSize:11,color:C.sub,marginBottom:8}}>Trigger: USDA raises yield / good weather</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
         <div style={{background:C.bg,borderRadius:6,padding:"6px 8px"}}><div style={{fontSize:9,color:C.sub,marginBottom:2}}>SUPPORT</div><div style={{fontSize:13,fontWeight:700,color:C.red}}>{sr?fmt(Math.round(sr.support*0.95)):"—"}</div></div>
