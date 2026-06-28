@@ -570,7 +570,7 @@ export default function App() {
 </div>)}
 
 {tab==="wasde"&&L&&sr&&(<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
-  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel & Scenarios</div>
+  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Trading Channel & Scenarios </div>
   <div style={{height:220,position:"relative",marginBottom:14}}><canvas ref={channelChartRef} style={{width:"100%",height:"100%"}}/></div>
   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
     <div onClick={function(){setSelectedScenario("bullish");}} style={{background:selectedScenario==="bullish"?"rgba(92,184,92,0.2)":"rgba(92,184,92,0.08)",border:"1px solid rgba(92,184,92,0.3)",borderRadius:10,padding:"14px",cursor:"pointer",transition:"all 0.2s"}}>

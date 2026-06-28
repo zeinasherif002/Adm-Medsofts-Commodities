@@ -640,9 +640,25 @@ def main():
         w_mape_brz = calc_mape(w_brz, w_yesterday.get("brz_predicted")) if w_yesterday and w_yesterday.get("brz_predicted") else None
         if w_mape_cbot: log(f"  MAPE CBOT: {w_mape_cbot}%")
         if w_mape_arg: log(f"  MAPE ARG: {w_mape_arg}%")
+        # Get yesterday wheat close for fut_ret
+        w_yesterday_close = None
+        try:
+            wr = requests.get(f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.wheat&order=date.desc&limit=2", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+            wrows = wr.json()
+            if len(wrows) >= 2: w_yesterday_close = float(wrows[1]["closing_cbot"])
+        except: pass
+        # Get yesterday wheat close for fut_ret
+        w_yesterday_close = None
+        try:
+            wr = requests.get(f"{SUPABASE_URL}/rest/v1/commodity_prices?commodity=eq.wheat&order=date.desc&limit=2", headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"})
+            wrows = wr.json()
+            if len(wrows) >= 2: w_yesterday_close = float(wrows[1]["closing_cbot"])
+        except: pass
         w_record = {
             "date": w_date.strftime("%Y-%m-%d"),
             "commodity": "wheat",
+            "fut_ret": round((w_cbot - w_yesterday_close) / w_yesterday_close, 6) if w_yesterday_close else None,
+            "fut_ret": round((w_cbot - w_yesterday_close) / w_yesterday_close, 6) if w_yesterday_close else None,
             "cbot_open": round(float(w_row["cbot_open"]), 4),
             "cbot_high": round(float(w_row["cbot_high"]), 4),
             "cbot_low": round(float(w_row["cbot_low"]), 4),
