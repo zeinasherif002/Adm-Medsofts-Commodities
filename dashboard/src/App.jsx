@@ -189,7 +189,7 @@ export default function App() {
     }
   }
 
-  function loadData(c){setLoading(true);fetch(SUPABASE_URL+"/rest/v1/commodity_prices?commodity=eq."+c+"&order=date.desc&limit=60",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setData(rows);setUpdated(new Date());setLoading(false);}).catch(function(e){console.error(e);setLoading(false);});}
+  function loadData(c){setLoading(true);fetch(SUPABASE_URL+"/rest/v1/commodity_prices?commodity=eq."+c+"&order=date.desc,created_at.desc&limit=60",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setData(rows);setUpdated(new Date());setLoading(false);}).catch(function(e){console.error(e);setLoading(false);});}
   function loadWeekly(c){fetch(SUPABASE_URL+"/rest/v1/weekly_forecast?commodity=eq."+c+"&order=forecast_date.asc&limit=10",{headers:HEADERS}).then(function(r){return r.json();}).then(function(rows){setWeekly(rows);}).catch(function(e){console.error(e);});}
   useEffect(function(){
     var script = document.createElement('script');
