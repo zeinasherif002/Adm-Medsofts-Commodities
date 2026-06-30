@@ -138,14 +138,20 @@ def fetch_market_data():
 
     log("Fetching EGP/USD rate...")
     try:
-        egp = yf.download("EGP=X", start=start, end=end, interval="1d", progress=False)
-        if isinstance(egp.columns, pd.MultiIndex):
-            egp.columns = [col[0] for col in egp.columns]
-        dollar_rate = float(egp["Close"].dropna().iloc[-1])
-        log(f"  Dollar rate: {dollar_rate:.2f} EGP/USD")
-    except:
-        dollar_rate = 53.0
-        log(f"  Using default dollar rate: {dollar_rate}")
+        r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=10)
+        dollar_rate = float(r.json()["rates"]["EGP"])
+        log(f"  Dollar rate: {dollar_rate:.2f} EGP/USD (open.er-api.com)")
+    except Exception as e:
+        log(f"  open.er-api.com failed: {e}, trying Yahoo Finance...")
+        try:
+            egp = yf.download("EGP=X", start=start, end=end, interval="1d", progress=False)
+            if isinstance(egp.columns, pd.MultiIndex):
+                egp.columns = [col[0] for col in egp.columns]
+            dollar_rate = float(egp["Close"].dropna().iloc[-1])
+            log(f"  Dollar rate: {dollar_rate:.2f} EGP/USD (Yahoo fallback)")
+        except:
+            dollar_rate = 49.10
+            log(f"  Using default dollar rate: {dollar_rate}")
 
     return corn.index[-1], today_row, dollar_rate, corn
 
