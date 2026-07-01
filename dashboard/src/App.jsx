@@ -39,6 +39,8 @@ export default function App() {
   var [wasdeChat,setWasdeChat]=useState([{role:"assistant",content:"Hello! Ask me anything about the upcoming WASDE report — expectations, scenarios, or trading strategy."}]);
   var [wasdeChatInput,setWasdeChatInput]=useState("");
   var [wasdeChatLoading,setWasdeChatLoading]=useState(false);
+  var [globalData,setGlobalData]=useState(null);
+  var [globalLoading,setGlobalLoading]=useState(false);
   var [selectedScenario,setSelectedScenario]=useState("neutral");
   var channelChartRef = useRef(null);
   var channelChartInstance = useRef(null);
@@ -79,6 +81,35 @@ export default function App() {
     .catch(function(e){
       setChatMessages(function(prev){return [...prev,{role:"assistant",content:"Error: "+e.message}];});
       setChatLoading(false);
+    });
+  }
+
+  function fetchGlobalData(){
+    setGlobalLoading(true);
+    var comm = commodity==="wheat"?"wheat":"corn";
+    var prompt = comm==="wheat" ?
+      "Search for the latest USDA WASDE estimates for July 2026: 1) World wheat ending stocks 2026/27 in million metric tons 2) Russia wheat production 2026 3) Ukraine wheat production 2026 4) EU wheat production 2026 5) World wheat consumption 2026/27. Return ONLY a JSON object with keys: world_ending_stocks, russia_production, ukraine_production, eu_production, world_consumption, unit (all in MMT). No other text." :
+      "Search for the latest USDA WASDE estimates for July 2026: 1) World corn ending stocks 2026/27 in million metric tons 2) Brazil corn production 2025/26 3) Argentina corn production 2025/26 4) Ukraine corn production 2026 5) World corn consumption 2026/27. Return ONLY a JSON object with keys: world_ending_stocks, brazil_production, argentina_production, ukraine_production, world_consumption, unit (all in MMT). No other text.";
+    fetch("https://cupcsspfmkgbcovtgszm.supabase.co/functions/v1/claude-chat",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cGNzc3BmbWtnYmNvdnRnc3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzI4ODMsImV4cCI6MjA5NDg0ODg4M30.Y8o09mcvdJuSSfgsVGnhoUyRpIUPVl8-gkigJXXee8E"},
+      body:JSON.stringify({messages:[{role:"user",content:prompt}],system:"You are a commodity data specialist. Search the web for the latest USDA WASDE global supply and demand data. Return ONLY valid JSON, no markdown, no explanation."})
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      try{
+        var text = data.text||"";
+        var clean = text.replace(/```json|```/g,"").trim();
+        var parsed = JSON.parse(clean);
+        setGlobalData(parsed);
+      }catch(e){
+        setGlobalData({error:"Could not parse data. Try again."});
+      }
+      setGlobalLoading(false);
+    })
+    .catch(function(e){
+      setGlobalData({error:e.message});
+      setGlobalLoading(false);
     });
   }
 
