@@ -674,9 +674,9 @@ export default function App() {
   <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style={{fontSize:13,fontWeight:700,color:C.text}}>Global Balance Sheet</div>
-      <button onClick={fetchGlobalData} disabled={globalLoading} style={{padding:"7px 16px",borderRadius:8,border:"1px solid "+C.blue,background:"rgba(27,58,140,0.15)",color:C.blue,fontSize:11,cursor:"pointer",fontWeight:700,opacity:globalLoading?0.6:1}}>{globalLoading?"Searching...":"Auto-Fetch Global Data"}</button>
+      <button onClick={fetchGlobalData} disabled={globalLoading} style={{padding:"7px 16px",borderRadius:8,border:"1px solid "+C.blue,background:"rgba(27,58,140,0.15)",color:C.blue,fontSize:11,cursor:"pointer",fontWeight:700,opacity:globalLoading?0.6:1}}>{globalLoading?"Searching...":"Fetch Global S&D Data"}</button>
     </div>
-    {!globalData&&!globalLoading&&<div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"16px 0"}}>Click "Auto-Fetch Global Data" to get latest world S&D estimates via AI web search</div>}
+    {!globalData&&!globalLoading&&<div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"16px 0"}}>Click "Fetch Global S&D Data" to get latest world S&D estimates via AI web search</div>}
     {globalLoading&&<div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"16px 0"}}>Searching web for latest USDA global data...</div>}
     {globalData&&globalData.error&&<div style={{fontSize:12,color:C.red,padding:"8px"}}>{globalData.error}</div>}{globalData&&globalData.raw&&!globalData.error&&<div style={{fontSize:12,color:C.text,padding:"8px",whiteSpace:"pre-wrap",lineHeight:1.6}}>{globalData.raw}</div>}
     {globalData&&!globalData.error&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
