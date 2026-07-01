@@ -88,8 +88,8 @@ export default function App() {
     setGlobalLoading(true);
     var comm = commodity==="wheat"?"wheat":"corn";
     var prompt = comm==="wheat" ?
-      "Search web for USDA WASDE July 2026 world wheat balance sheet. Return ONLY raw JSON with these exact keys: world_ending_stocks (MMT number), world_consumption (MMT number), russia_production (MMT number), ukraine_production (MMT number), eu_production (MMT number). No text, no markdown backticks, just the JSON object." :
-      "Search web for USDA WASDE July 2026 world corn balance sheet. Return ONLY raw JSON with these exact keys: world_ending_stocks (MMT number), world_consumption (MMT number), brazil_production (MMT number), argentina_production (MMT number), ukraine_production (MMT number). No text, no markdown backticks, just the JSON object.";
+      "Search for USDA WASDE June 2026 world wheat supply and use table. Find: world wheat ending stocks 2025/26 in MMT, world wheat consumption 2025/26 in MMT, Russia wheat production 2025/26 in MMT, Ukraine wheat production 2025/26 in MMT, EU wheat production 2025/26 in MMT. Return ONLY raw JSON no backticks: world_ending_stocks, world_consumption, russia_production, ukraine_production, eu_production as numbers." :
+      "Search for USDA WASDE June 2026 world coarse grains or corn supply and use table. Find these numbers: world corn ending stocks 2025/26 in MMT, world corn consumption 2025/26 in MMT, Brazil corn production 2025/26 in MMT, Argentina corn production 2025/26 in MMT, Ukraine corn production 2025/26 in MMT. Return ONLY raw JSON no backticks: world_ending_stocks, world_consumption, brazil_production, argentina_production, ukraine_production as numbers.";
     fetch("https://cupcsspfmkgbcovtgszm.supabase.co/functions/v1/claude-chat",{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cGNzc3BmbWtnYmNvdnRnc3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzI4ODMsImV4cCI6MjA5NDg0ODg4M30.Y8o09mcvdJuSSfgsVGnhoUyRpIUPVl8-gkigJXXee8E"},
