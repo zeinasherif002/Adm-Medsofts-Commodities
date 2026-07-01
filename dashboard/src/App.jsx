@@ -575,27 +575,26 @@ export default function App() {
       </div>
     </div>
     <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:"18px 20px"}}>
-      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>Historical WASDE Price Reaction *</div>
-      {[
-        {month:"Jul 2025",change:"+3.2%",dir:1,note:"Yield cut to 179.3 bu/ac"},
-        {month:"Aug 2025",change:"-1.8%",dir:-1,note:"Good crop weather"},
-        {month:"Sep 2025",change:"+1.1%",dir:1,note:"Export demand strong"},
-        {month:"Oct 2025",change:"-2.4%",dir:-1,note:"Record production raised"},
-        {month:"Nov 2025",change:"-0.9%",dir:-1,note:"Large ending stocks"},
-        {month:"Dec 2025",change:"?",dir:0,note:"Dec 10, 2025"},
-        {month:"Jan 2026",change:"?",dir:0,note:"Jan 12, 2026"},
-        {month:"Feb 2026",change:"?",dir:0,note:"Feb 10, 2026 (+0.18%)"},
-        {month:"Mar 2026",change:"?",dir:0,note:"Mar 10, 2026"},
-        {month:"Apr 2026",change:"?",dir:0,note:"Apr 9, 2026"},
-        {month:"May 2026",change:"?",dir:0,note:"May 12, 2026"},
-        {month:"Jun 2026",change:"?",dir:0,note:"Jun 11, 2026 — passed"}
-      ].map(function(row,i){return(
-        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:i===0?"none":"1px solid "+C.border}}>
-          <div style={{fontSize:12,color:C.sub}}>{row.month}</div>
-          <div style={{fontSize:12,color:row.dir===1?C.green:row.dir===-1?C.red:C.amber,fontWeight:700}}>{row.change}</div>
-          <div style={{fontSize:11,color:C.muted,maxWidth:150,textAlign:"right"}}>{row.note}</div>
-        </div>
-      );})}
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>July 10 WASDE — Expectation vs Actual</div>
+      <div style={{fontSize:11,color:C.sub,marginBottom:12}}>Consensus analyst estimates vs our model vs USDA official release</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:0}}>
+        {[
+          {label:"",market:"Market Est.",model:"Our Model",actual:"Actual (Jul 10)"},
+          {label:isWheat?"Planted Acres":"Planted Acres",market:isWheat?"42.7M":"95.3M",model:isWheat?(wasdeWheat?wasdeWheat.planted_acres?(wasdeWheat.planted_acres/1e6).toFixed(1)+"M":"42.7M":"42.7M"):(wasde?wasde.planted_acres?(wasde.planted_acres/1e6).toFixed(1)+"M":"95.3M":"95.3M"),actual:"TBD"},
+          {label:isWheat?"Est. Yield":"Est. Yield",market:isWheat?"49.5 bu/ac":"181.5 bu/ac",model:isWheat?(wasdeWheat?wasdeWheat.estimated_yield+" bu/ac":"48.5 bu/ac"):(wasde?wasde.estimated_yield+" bu/ac":"181 bu/ac"),actual:"TBD"},
+          {label:"Est. Production",market:isWheat?"1.72B bu":"14.8B bu",model:isWheat?(wasdeWheat?wasdeWheat.estimated_production+"B bu":"1.72B bu"):(wasde?wasde.estimated_production+"B bu":"14.8B bu"),actual:"TBD"},
+          {label:"Ending Stocks",market:isWheat?"580M bu":"1.85B bu",model:"—",actual:"TBD"},
+          {label:"Price Reaction",market:"—",model:"—",actual:"TBD"}
+        ].map(function(row,i){return(
+          <React.Fragment key={i}>
+            <div style={{padding:"8px 10px",borderTop:i===0?"none":"1px solid "+C.border,background:i===0?C.bg:"transparent",fontSize:i===0?10:12,fontWeight:i===0?700:400,color:i===0?C.sub:C.text}}>{row.label}</div>
+            <div style={{padding:"8px 10px",borderTop:i===0?"none":"1px solid "+C.border,borderLeft:"1px solid "+C.border,background:i===0?C.bg:"transparent",fontSize:i===0?10:12,fontWeight:i===0?700:600,color:i===0?C.sub:C.amber,textAlign:"center"}}>{row.market}</div>
+            <div style={{padding:"8px 10px",borderTop:i===0?"none":"1px solid "+C.border,borderLeft:"1px solid "+C.border,background:i===0?C.bg:"transparent",fontSize:i===0?10:12,fontWeight:i===0?700:600,color:i===0?C.sub:C.blue,textAlign:"center"}}>{row.model}</div>
+            <div style={{padding:"8px 10px",borderTop:i===0?"none":"1px solid "+C.border,borderLeft:"1px solid "+C.border,background:i===0?C.bg:"transparent",fontSize:i===0?10:12,fontWeight:i===0?700:600,color:i===0?C.sub:C.muted,textAlign:"center"}}>{row.actual}</div>
+          </React.Fragment>
+        );})}
+      </div>
+      <div style={{fontSize:10,color:C.muted,marginTop:10,fontStyle:"italic"}}>* Update Actual column after July 10 WASDE release (12:00 PM ET / 7:00 PM Cairo)</div>
     </div>
   </div>
 </div>)}
