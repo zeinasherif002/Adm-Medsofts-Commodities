@@ -678,7 +678,7 @@ export default function App() {
     </div>
     {!globalData&&!globalLoading&&<div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"16px 0"}}>Click "Auto-Fetch Global Data" to get latest world S&D estimates via AI web search</div>}
     {globalLoading&&<div style={{fontSize:12,color:C.sub,textAlign:"center",padding:"16px 0"}}>Searching web for latest USDA global data...</div>}
-    {globalData&&globalData.error&&<div style={{fontSize:12,color:C.red,padding:"8px"}}>{globalData.error}</div>}
+    {globalData&&globalData.error&&<div style={{fontSize:12,color:C.red,padding:"8px"}}>{globalData.error}</div>}{globalData&&globalData.raw&&!globalData.error&&<div style={{fontSize:12,color:C.text,padding:"8px",whiteSpace:"pre-wrap",lineHeight:1.6}}>{globalData.raw}</div>}
     {globalData&&!globalData.error&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
       <div style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>World Ending Stocks</div><div style={{fontSize:15,fontWeight:700,color:C.blue}}>{globalData.world_ending_stocks} MMT</div></div>
       <div style={{background:C.bg,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:C.sub,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>World Consumption</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{globalData.world_consumption} MMT</div></div>
