@@ -103,7 +103,7 @@ export default function App() {
         var parsed = JSON.parse(clean);
         setGlobalData(parsed);
       }catch(e){
-        setGlobalData({error:"Could not parse data. Try again."});
+        setGlobalData({raw:data.text||"No data returned",error:null});
       }
       setGlobalLoading(false);
     })
