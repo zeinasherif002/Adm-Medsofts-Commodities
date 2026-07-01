@@ -88,8 +88,8 @@ export default function App() {
     setGlobalLoading(true);
     var comm = commodity==="wheat"?"wheat":"corn";
     var prompt = comm==="wheat" ?
-      "Search for the latest USDA WASDE estimates for July 2026: 1) World wheat ending stocks 2026/27 in million metric tons 2) Russia wheat production 2026 3) Ukraine wheat production 2026 4) EU wheat production 2026 5) World wheat consumption 2026/27. Return ONLY a JSON object with keys: world_ending_stocks, russia_production, ukraine_production, eu_production, world_consumption, unit (all in MMT). No other text." :
-      "Search for the latest USDA WASDE estimates for July 2026: 1) World corn ending stocks 2026/27 in million metric tons 2) Brazil corn production 2025/26 3) Argentina corn production 2025/26 4) Ukraine corn production 2026 5) World corn consumption 2026/27. Return ONLY a JSON object with keys: world_ending_stocks, brazil_production, argentina_production, ukraine_production, world_consumption, unit (all in MMT). No other text.";
+      "Search web for USDA WASDE July 2026 world wheat balance sheet. Return ONLY raw JSON with these exact keys: world_ending_stocks (MMT number), world_consumption (MMT number), russia_production (MMT number), ukraine_production (MMT number), eu_production (MMT number). No text, no markdown backticks, just the JSON object." :
+      "Search web for USDA WASDE July 2026 world corn balance sheet. Return ONLY raw JSON with these exact keys: world_ending_stocks (MMT number), world_consumption (MMT number), brazil_production (MMT number), argentina_production (MMT number), ukraine_production (MMT number). No text, no markdown backticks, just the JSON object.";
     fetch("https://cupcsspfmkgbcovtgszm.supabase.co/functions/v1/claude-chat",{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1cGNzc3BmbWtnYmNvdnRnc3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzI4ODMsImV4cCI6MjA5NDg0ODg4M30.Y8o09mcvdJuSSfgsVGnhoUyRpIUPVl8-gkigJXXee8E"},
