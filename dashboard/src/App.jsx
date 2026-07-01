@@ -91,7 +91,7 @@ export default function App() {
       "Next WASDE: July 10 2026. " +
       (wasde ? "Corn: planted "+( wasde.planted_acres/1e6).toFixed(1)+"M acres, G+E "+wasde.ge_condition+"%, est yield "+wasde.estimated_yield+" bu/ac, "+wasde.price_impact+". " : "") +
       (wasdeWheat ? "Wheat: planted "+(wasdeWheat.planted_acres/1e6).toFixed(1)+"M acres, G+E "+wasdeWheat.ge_condition+"%, "+wasdeWheat.price_impact+". " : "") +
-      "Use web search for latest WASDE expectations and analyst forecasts. Be specific and actionable.";
+      "You have access to web search - USE IT to find the latest: " + "1. USDA WASDE July 10 2026 analyst consensus for corn and wheat (yield, production, US and world ending stocks). " + "2. Global corn ending stocks 2026/27 world balance (Brazil, Argentina, Ukraine, US). " + "3. Global wheat ending stocks 2026/27 world balance (Russia, Ukraine, EU, US). " + "4. Recent Egyptian import tenders and purchase prices. " + "ADM MedSofts Egypt trades Brazilian, Argentine and Ukrainian corn - NOT just US corn. For wheat, Egypt mainly imports Russian and Ukrainian wheat. Always provide WORLD balance sheet data not just US figures. Be specific with numbers and give actionable trading recommendations.";
     var msgs = wasdeChat.concat([{role:"user",content:userMsg}]).map(function(m){return {role:m.role,content:m.content};});
     fetch("https://cupcsspfmkgbcovtgszm.supabase.co/functions/v1/claude-chat",{
       method:"POST",
