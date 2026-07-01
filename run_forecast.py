@@ -487,7 +487,7 @@ def fetch_wasde_preanalysis_wheat():
         log("Generating pre-WASDE wheat analysis...")
         key = "35261C14-1718-33EA-8A82-9771679304D0"
         # Get wheat planted acres
-        url_acres = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=WHEAT&statisticcat_desc=AREA+PLANTED&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&format=JSON"
+        url_acres = f"https://quickstats.nass.usda.gov/api/api_GET/?key={key}&commodity_desc=WHEAT&statisticcat_desc=AREA+PLANTED&unit_desc=ACRES&year=2026&agg_level_desc=NATIONAL&reference_period_desc=YEAR+-+JUN+ACREAGE&format=JSON"
         r_acres = requests.get(url_acres, timeout=15)
         acres_data = r_acres.json().get("data", [])
         planted_acres = float(acres_data[0]["Value"].replace(",","")) if acres_data else 43800000
